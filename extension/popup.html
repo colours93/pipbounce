@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 260px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 14px;
+    }
+    .status.active { color: #4ade80; }
+    .status.inactive { color: #f87171; }
+    .status.error { color: #fbbf24; }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .toggle-label { font-size: 13px; }
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      cursor: pointer;
+    }
+    .toggle input { display: none; }
+    .toggle .slider {
+      position: absolute;
+      inset: 0;
+      background: #444;
+      border-radius: 12px;
+      transition: background 0.2s;
+    }
+    .toggle .slider::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .slider {
+      background: #4ade80;
+    }
+    .toggle input:checked + .slider::after {
+      transform: translateX(20px);
+    }
+
+    /* Slider settings */
+    .setting {
+      margin-bottom: 12px;
+    }
+    .setting-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    .setting-value {
+      color: #eee;
+      font-weight: 500;
+    }
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      -webkit-appearance: none;
+      background: #333;
+      border-radius: 2px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #4ade80;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .pip-status {
+      font-size: 11px;
+      color: #666;
+      text-align: center;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #333;
+    }
+    .pip-status.has-pip { color: #4ade80; }
+
+    .pip-btn {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 14px;
+      background: #4ade80;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .pip-btn:hover { background: #22c55e; }
+
+    .setting-hint {
+      font-size: 10px;
+      color: #666;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Mouse-Aware PiP</h1>
+  <div class="status" id="daemonStatus">Connecting...</div>
+
+  <button id="pipBtn" class="pip-btn">Toggle PiP (Alt+P)</button>
+
+  <div class="toggle-row">
+    <span class="toggle-label">Dodge enabled</span>
+    <label class="toggle">
+      <input type="checkbox" id="enableToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="setting">
+    <div class="setting-header">
+      <span>Dodge distance</span>
+      <span class="setting-value" id="distanceValue">200px</span>
+    </div>
+    <input type="range" id="dodgeDistance" min="80" max="400" value="200" step="10">
+  </div>
+
+  <div class="setting">
+    <div class="setting-header">
+      <span>Cooldown</span>
+      <span class="setting-value" id="cooldownValue">0.4s</span>
+    </div>
+    <input type="range" id="cooldown" min="0.1" max="2.0" value="0.4" step="0.1">
+  </div>
+
+  <div class="setting">
+    <div class="setting-header">
+      <span>Screen margin</span>
+      <span class="setting-value" id="marginValue">20px</span>
+    </div>
+    <input type="range" id="margin" min="5" max="60" value="20" step="5">
+  </div>
+
+  <div class="setting">
+    <div class="setting-header">
+      <span>Corner safe zone</span>
+      <span class="setting-value" id="cornerSizeValue">120px</span>
+    </div>
+    <input type="range" id="cornerSize" min="40" max="250" value="120" step="10">
+    <div class="setting-hint">Enter from PiP corner to interact. Sides trigger dodge.</div>
+  </div>
+
+  <div class="pip-status" id="pipStatus">No PiP window detected</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

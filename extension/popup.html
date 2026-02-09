@@ -84,37 +84,44 @@
       background: #fafafa;
     }
 
-    .setting {
+    .seg-row {
       padding: 10px 0;
       border-top: 1px solid #27272a;
     }
-    .setting-header {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: #71717a;
-      margin-bottom: 8px;
-      letter-spacing: 0.04em;
-    }
-    .setting-value {
+    .seg-label {
+      font-size: 12px;
       color: #a1a1aa;
-      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
     }
-    input[type="range"] {
-      width: 100%;
-      height: 2px;
-      -webkit-appearance: none;
-      background: #27272a;
-      border-radius: 1px;
-      outline: none;
+    .seg {
+      display: flex;
+      border: 1px solid #27272a;
+      border-radius: 20px;
+      overflow: hidden;
     }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 12px;
-      height: 12px;
-      background: #fafafa;
-      border-radius: 50%;
+    .seg button {
+      flex: 1;
+      padding: 7px 0;
+      background: transparent;
+      color: #52525b;
+      border: none;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.06em;
       cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+    .seg button:not(:last-child) {
+      border-right: 1px solid #27272a;
+    }
+    .seg button.active {
+      background: #27272a;
+      color: #fafafa;
+    }
+    .seg button:hover:not(.active) {
+      color: #a1a1aa;
     }
 
     .status {
@@ -143,12 +150,13 @@
     </label>
   </div>
 
-  <div class="setting">
-    <div class="setting-header">
-      <span>Corner zone</span>
-      <span class="setting-value" id="cornerSizeValue">120px</span>
+  <div class="seg-row">
+    <div class="seg-label">Corner zone</div>
+    <div class="seg" id="cornerZone">
+      <button data-value="80">Small</button>
+      <button data-value="150" class="active">Medium</button>
+      <button data-value="220">Large</button>
     </div>
-    <input type="range" id="cornerSize" min="40" max="250" value="120" step="10">
   </div>
 
   <div class="status" id="daemonStatus">Connecting...</div>

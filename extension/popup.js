@@ -3,9 +3,10 @@ const API = "http://127.0.0.1:51789";
 const els = {
   status: document.getElementById("daemonStatus"),
   toggle: document.getElementById("enableToggle"),
-  cornerSize: document.getElementById("cornerSize"),
-  cornerSizeVal: document.getElementById("cornerSizeValue"),
+  seg: document.getElementById("cornerZone"),
 };
+
+const zoneBtns = els.seg.querySelectorAll("button");
 
 async function triggerPip() {
   try {
@@ -24,6 +25,19 @@ async function triggerPip() {
 triggerPip();
 document.getElementById("pipBtn").addEventListener("click", triggerPip);
 
+function setActiveZone(value) {
+  zoneBtns.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.value === String(value));
+  });
+}
+
+function closestZone(px) {
+  const zones = [80, 150, 220];
+  return zones.reduce((prev, curr) =>
+    Math.abs(curr - px) < Math.abs(prev - px) ? curr : prev
+  );
+}
+
 async function fetchStatus() {
   try {
     const res = await fetch(`${API}/status`);
@@ -33,8 +47,7 @@ async function fetchStatus() {
     els.status.className = "status active";
 
     els.toggle.checked = data.enabled;
-    els.cornerSize.value = data.cornerSize;
-    els.cornerSizeVal.textContent = data.cornerSize + "px";
+    setActiveZone(closestZone(data.cornerSize));
   } catch {
     els.status.textContent = "Daemon not running — start ~/.xpip/xpip";
     els.status.className = "status error";
@@ -55,9 +68,11 @@ els.toggle.addEventListener("change", () => {
   updateSettings({ enabled: els.toggle.checked });
 });
 
-els.cornerSize.addEventListener("input", () => {
-  els.cornerSizeVal.textContent = els.cornerSize.value + "px";
-  updateSettings({ cornerSize: Number(els.cornerSize.value) });
+zoneBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setActiveZone(btn.dataset.value);
+    updateSettings({ cornerSize: Number(btn.dataset.value) });
+  });
 });
 
 fetchStatus();

@@ -5,7 +5,6 @@ import ApplicationServices
 
 class Settings {
     var enabled = true
-    var dodgeDistance: CGFloat = 200
     var cooldown: TimeInterval = 0.4
     var margin: CGFloat = 20
     var cornerSize: CGFloat = 100
@@ -16,7 +15,6 @@ let settings = Settings()
 // MARK: - PiP Window Discovery
 
 struct PipWindowInfo {
-    let pid: pid_t
     let bounds: CGRect
     let axWindow: AXUIElement
 }
@@ -34,7 +32,7 @@ func findPipWindow() -> PipWindowInfo? {
               let windows = windowsRef as? [AXUIElement] else { continue }
 
         for window in windows {
-            if let info = extractPipInfo(from: window, pid: app.processIdentifier) {
+            if let info = extractPipInfo(from: window) {
                 return info
             }
         }
@@ -43,7 +41,7 @@ func findPipWindow() -> PipWindowInfo? {
     return nil
 }
 
-private func extractPipInfo(from window: AXUIElement, pid: pid_t) -> PipWindowInfo? {
+private func extractPipInfo(from window: AXUIElement) -> PipWindowInfo? {
     var titleRef: CFTypeRef?
     _ = AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
     let title = (titleRef as? String) ?? ""
@@ -73,15 +71,7 @@ private func extractPipInfo(from window: AXUIElement, pid: pid_t) -> PipWindowIn
     guard isPip || isDocPip else { return nil }
 
     let bounds = CGRect(origin: pos, size: size)
-    return PipWindowInfo(pid: pid, bounds: bounds, axWindow: window)
-}
-
-// MARK: - Window Movement
-
-func movePipWindow(_ pip: PipWindowInfo, to target: CGPoint) -> Bool {
-    var newPos = target
-    let posVal = AXValueCreate(.cgPoint, &newPos)!
-    return AXUIElementSetAttributeValue(pip.axWindow, kAXPositionAttribute as CFString, posVal) == .success
+    return PipWindowInfo(bounds: bounds, axWindow: window)
 }
 
 // MARK: - Screen Geometry
@@ -205,7 +195,6 @@ class ControlServer {
         if firstLine.contains("GET /status") {
             let pip = findPipWindow()
             return "{\"enabled\":\(settings.enabled),"
-                + "\"dodgeDistance\":\(Int(settings.dodgeDistance)),"
                 + "\"cooldown\":\(settings.cooldown),"
                 + "\"margin\":\(Int(settings.margin)),"
                 + "\"cornerSize\":\(Int(settings.cornerSize)),"
@@ -229,7 +218,6 @@ class ControlServer {
         if firstLine.contains("POST /settings") {
             applySettings(from: body)
             return "{\"enabled\":\(settings.enabled),"
-                + "\"dodgeDistance\":\(Int(settings.dodgeDistance)),"
                 + "\"cooldown\":\(settings.cooldown),"
                 + "\"margin\":\(Int(settings.margin)),"
                 + "\"cornerSize\":\(Int(settings.cornerSize))}"
@@ -244,14 +232,12 @@ class ControlServer {
             return
         }
 
-        if let d = json["dodgeDistance"] as? Double { settings.dodgeDistance = CGFloat(d) }
         if let c = json["cooldown"] as? Double { settings.cooldown = c }
         if let m = json["margin"] as? Double { settings.margin = CGFloat(m) }
         if let e = json["enabled"] as? Bool { settings.enabled = e }
         if let cs = json["cornerSize"] as? Double { settings.cornerSize = CGFloat(cs) }
 
-        print("Settings updated: distance=\(Int(settings.dodgeDistance))"
-              + " cooldown=\(settings.cooldown)"
+        print("Settings updated: cooldown=\(settings.cooldown)"
               + " margin=\(Int(settings.margin))"
               + " cornerSize=\(Int(settings.cornerSize))"
               + " enabled=\(settings.enabled)")
@@ -265,11 +251,23 @@ class XPipDaemon {
     private var interacting = false
     private var wasOnPip = false
 
+    private var animating = false
+    private var animStart = CGPoint.zero
+    private var animEnd = CGPoint.zero
+    private var animStartMach: UInt64 = 0
+    private let animDuration: Double = 0.18
+    private var animWindow: AXUIElement?
+    private var animTimer: DispatchSourceTimer?
+    private let animQueue = DispatchQueue(label: "xpip.anim", qos: .userInteractive)
+    private static var timebaseInfo: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
     func start() {
         if !AXIsProcessTrusted() {
             print("Accessibility permission required")
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-            AXIsProcessTrustedWithOptions(opts)
         }
 
         print("xpip daemon started")
@@ -280,7 +278,7 @@ class XPipDaemon {
     }
 
     private func tick() {
-        guard settings.enabled,
+        guard !animating, settings.enabled,
               let event = CGEvent(source: nil) else { return }
 
         let mousePos = event.location
@@ -309,6 +307,29 @@ class XPipDaemon {
         wasOnPip = onPip
     }
 
+    private func stepAnimation() {
+        let elapsed = mach_absolute_time() - animStartMach
+        let info = Self.timebaseInfo
+        let sec = Double(elapsed * UInt64(info.numer) / UInt64(info.denom)) / 1_000_000_000
+        let t = min(sec / animDuration, 1.0)
+        let ease = 1.0 - pow(1.0 - t, 3.0)
+
+        let x = animStart.x + (animEnd.x - animStart.x) * CGFloat(ease)
+        let y = animStart.y + (animEnd.y - animStart.y) * CGFloat(ease)
+        var pos = CGPoint(x: x, y: y)
+
+        if let win = animWindow, let val = AXValueCreate(.cgPoint, &pos) {
+            AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, val)
+        }
+
+        if t >= 1.0 {
+            animTimer?.cancel()
+            animTimer = nil
+            animating = false
+            animWindow = nil
+        }
+    }
+
     private func dodgeIfReady(pip: PipWindowInfo, mousePos: CGPoint) {
         let now = Date()
         guard now.timeIntervalSince(lastDodgeTime) >= settings.cooldown else { return }
@@ -316,18 +337,25 @@ class XPipDaemon {
         let screen = getScreenFrame()
         let target = getFurthestCorner(from: mousePos, windowSize: pip.bounds.size, screen: screen)
 
-        // Skip if the window is already at the target corner.
         let alreadyThere = abs(pip.bounds.origin.x - target.x) < 30
             && abs(pip.bounds.origin.y - target.y) < 30
         guard !alreadyThere else { return }
 
-        if movePipWindow(pip, to: target) {
-            lastDodgeTime = now
-        }
+        animStart = pip.bounds.origin
+        animEnd = target
+        animStartMach = mach_absolute_time()
+        animWindow = pip.axWindow
+        animating = true
+        lastDodgeTime = now
+
+        animTimer?.cancel()
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: animQueue)
+        t.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .microseconds(500))
+        t.setEventHandler { [weak self] in self?.stepAnimation() }
+        animTimer = t
+        t.resume()
     }
 
-    /// Returns true when the mouse is in one of the four corner zones of the PiP window,
-    /// allowing the user to interact (resize/close) without triggering a dodge.
     private func isInPipCorner(mousePos: CGPoint, pipBounds: CGRect) -> Bool {
         let cs = min(settings.cornerSize, min(pipBounds.width, pipBounds.height) / 2)
         let nearLeft = mousePos.x - pipBounds.minX < cs

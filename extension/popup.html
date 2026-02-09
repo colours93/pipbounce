@@ -4,11 +4,11 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 280px;
+      width: 240px;
       font-family: Inter, system-ui, -apple-system, sans-serif;
       background: #18181b;
       color: #fafafa;
-      padding: 20px;
+      padding: 16px;
       font-weight: 300;
       letter-spacing: 0.02em;
     }
@@ -17,28 +17,17 @@
       font-weight: 300;
       letter-spacing: 0.15em;
       text-transform: uppercase;
-      margin-bottom: 16px;
-      color: #fafafa;
+      margin-bottom: 14px;
     }
-    .status {
-      font-size: 11px;
-      font-weight: 300;
-      color: #a1a1aa;
-      margin-bottom: 16px;
-      letter-spacing: 0.04em;
-    }
-    .status.active { color: #d4d4d8; }
-    .status.inactive { color: #71717a; }
-    .status.error { color: #a1a1aa; }
 
     .pip-btn {
       width: 100%;
       padding: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       background: transparent;
       color: #fafafa;
       border: 1px solid #27272a;
-      border-radius: 6px;
+      border-radius: 20px;
       font-size: 12px;
       font-weight: 300;
       letter-spacing: 0.06em;
@@ -51,20 +40,19 @@
       background: #27272a;
     }
 
-    .toggle-row {
+    .row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #27272a;
+      padding: 10px 0;
+      border-top: 1px solid #27272a;
     }
-    .toggle-label {
+    .row-label {
       font-size: 12px;
-      font-weight: 300;
       color: #a1a1aa;
       letter-spacing: 0.04em;
     }
+
     .toggle {
       position: relative;
       width: 36px;
@@ -84,34 +72,32 @@
       position: absolute;
       width: 14px;
       height: 14px;
-      background: #71717a;
+      background: #52525b;
       border-radius: 50%;
       top: 3px;
       left: 3px;
       transition: transform 0.2s, background 0.2s;
     }
-    .toggle input:checked + .slider {
-      background: #3f3f46;
-    }
+    .toggle input:checked + .slider { background: #3f3f46; }
     .toggle input:checked + .slider::after {
       transform: translateX(16px);
       background: #fafafa;
     }
 
     .setting {
-      margin-bottom: 14px;
+      padding: 10px 0;
+      border-top: 1px solid #27272a;
     }
     .setting-header {
       display: flex;
       justify-content: space-between;
       font-size: 11px;
       color: #71717a;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       letter-spacing: 0.04em;
     }
     .setting-value {
       color: #a1a1aa;
-      font-weight: 400;
       font-variant-numeric: tabular-nums;
     }
     input[type="range"] {
@@ -129,40 +115,28 @@
       background: #fafafa;
       border-radius: 50%;
       cursor: pointer;
-      transition: background 0.15s;
-    }
-    input[type="range"]::-webkit-slider-thumb:hover {
-      background: #d4d4d8;
     }
 
-    .pip-status {
+    .status {
       font-size: 10px;
       font-weight: 300;
       color: #3f3f46;
       text-align: center;
-      margin-top: 12px;
-      padding-top: 12px;
+      padding-top: 10px;
       border-top: 1px solid #27272a;
       letter-spacing: 0.04em;
     }
-    .pip-status.has-pip { color: #a1a1aa; }
-
-    .setting-hint {
-      font-size: 10px;
-      color: #3f3f46;
-      margin-top: 4px;
-      letter-spacing: 0.02em;
-    }
+    .status.active { color: #a1a1aa; }
+    .status.error { color: #71717a; }
   </style>
 </head>
 <body>
   <h1>xpip</h1>
-  <div class="status" id="daemonStatus">Connecting...</div>
 
-  <button id="pipBtn" class="pip-btn">Toggle PiP (Alt+P)</button>
+  <button id="pipBtn" class="pip-btn">Toggle PiP</button>
 
-  <div class="toggle-row">
-    <span class="toggle-label">Dodge enabled</span>
+  <div class="row">
+    <span class="row-label">Dodge</span>
     <label class="toggle">
       <input type="checkbox" id="enableToggle" checked>
       <span class="slider"></span>
@@ -171,38 +145,13 @@
 
   <div class="setting">
     <div class="setting-header">
-      <span>Dodge distance</span>
-      <span class="setting-value" id="distanceValue">200px</span>
-    </div>
-    <input type="range" id="dodgeDistance" min="80" max="400" value="200" step="10">
-  </div>
-
-  <div class="setting">
-    <div class="setting-header">
-      <span>Cooldown</span>
-      <span class="setting-value" id="cooldownValue">0.4s</span>
-    </div>
-    <input type="range" id="cooldown" min="0.1" max="2.0" value="0.4" step="0.1">
-  </div>
-
-  <div class="setting">
-    <div class="setting-header">
-      <span>Screen margin</span>
-      <span class="setting-value" id="marginValue">20px</span>
-    </div>
-    <input type="range" id="margin" min="5" max="60" value="20" step="5">
-  </div>
-
-  <div class="setting">
-    <div class="setting-header">
-      <span>Corner safe zone</span>
+      <span>Corner zone</span>
       <span class="setting-value" id="cornerSizeValue">120px</span>
     </div>
     <input type="range" id="cornerSize" min="40" max="250" value="120" step="10">
-    <div class="setting-hint">Enter from PiP corner to interact. Sides trigger dodge.</div>
   </div>
 
-  <div class="pip-status" id="pipStatus">No PiP window detected</div>
+  <div class="status" id="daemonStatus">Connecting...</div>
 
   <script src="popup.js"></script>
 </body>

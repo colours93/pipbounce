@@ -4,130 +4,154 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 260px;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
-      padding: 16px;
+      width: 280px;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      background: #18181b;
+      color: #fafafa;
+      padding: 20px;
+      font-weight: 300;
+      letter-spacing: 0.02em;
     }
     h1 {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      color: #fafafa;
     }
     .status {
       font-size: 11px;
-      color: #888;
-      margin-bottom: 14px;
+      font-weight: 300;
+      color: #a1a1aa;
+      margin-bottom: 16px;
+      letter-spacing: 0.04em;
     }
-    .status.active { color: #4ade80; }
-    .status.inactive { color: #f87171; }
-    .status.error { color: #fbbf24; }
+    .status.active { color: #d4d4d8; }
+    .status.inactive { color: #71717a; }
+    .status.error { color: #a1a1aa; }
 
-    /* Toggle */
+    .pip-btn {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 16px;
+      background: transparent;
+      color: #fafafa;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 300;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .pip-btn:hover {
+      border-color: #3f3f46;
+      background: #27272a;
+    }
+
     .toggle-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #27272a;
     }
-    .toggle-label { font-size: 13px; }
+    .toggle-label {
+      font-size: 12px;
+      font-weight: 300;
+      color: #a1a1aa;
+      letter-spacing: 0.04em;
+    }
     .toggle {
       position: relative;
-      width: 44px;
-      height: 24px;
+      width: 36px;
+      height: 20px;
       cursor: pointer;
     }
     .toggle input { display: none; }
     .toggle .slider {
       position: absolute;
       inset: 0;
-      background: #444;
-      border-radius: 12px;
+      background: #27272a;
+      border-radius: 10px;
       transition: background 0.2s;
     }
     .toggle .slider::after {
       content: '';
       position: absolute;
-      width: 18px;
-      height: 18px;
-      background: #fff;
+      width: 14px;
+      height: 14px;
+      background: #71717a;
       border-radius: 50%;
       top: 3px;
       left: 3px;
-      transition: transform 0.2s;
+      transition: transform 0.2s, background 0.2s;
     }
     .toggle input:checked + .slider {
-      background: #4ade80;
+      background: #3f3f46;
     }
     .toggle input:checked + .slider::after {
-      transform: translateX(20px);
+      transform: translateX(16px);
+      background: #fafafa;
     }
 
-    /* Slider settings */
     .setting {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .setting-header {
       display: flex;
       justify-content: space-between;
-      font-size: 12px;
-      color: #aaa;
-      margin-bottom: 4px;
+      font-size: 11px;
+      color: #71717a;
+      margin-bottom: 6px;
+      letter-spacing: 0.04em;
     }
     .setting-value {
-      color: #eee;
-      font-weight: 500;
+      color: #a1a1aa;
+      font-weight: 400;
+      font-variant-numeric: tabular-nums;
     }
     input[type="range"] {
       width: 100%;
-      height: 4px;
+      height: 2px;
       -webkit-appearance: none;
-      background: #333;
-      border-radius: 2px;
+      background: #27272a;
+      border-radius: 1px;
       outline: none;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      background: #4ade80;
+      width: 12px;
+      height: 12px;
+      background: #fafafa;
       border-radius: 50%;
       cursor: pointer;
+      transition: background 0.15s;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      background: #d4d4d8;
     }
 
     .pip-status {
-      font-size: 11px;
-      color: #666;
+      font-size: 10px;
+      font-weight: 300;
+      color: #3f3f46;
       text-align: center;
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid #333;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #27272a;
+      letter-spacing: 0.04em;
     }
-    .pip-status.has-pip { color: #4ade80; }
-
-    .pip-btn {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 14px;
-      background: #4ade80;
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .pip-btn:hover { background: #22c55e; }
+    .pip-status.has-pip { color: #a1a1aa; }
 
     .setting-hint {
       font-size: 10px;
-      color: #666;
-      margin-top: 2px;
+      color: #3f3f46;
+      margin-top: 4px;
+      letter-spacing: 0.02em;
     }
   </style>
 </head>

@@ -2,16 +2,16 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-#  PipDodge Installer
+#  xpip Installer
 #  Compiles the Swift daemon, generates extension icons, and prints
 #  post-install instructions.
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DAEMON_SRC="$SCRIPT_DIR/daemon/PipDodge.swift"
+DAEMON_SRC="$SCRIPT_DIR/daemon/xpip.swift"
 EXTENSION_DIR="$SCRIPT_DIR/extension"
-INSTALL_DIR="$HOME/.pipdodge"
-BINARY="$INSTALL_DIR/pipdodge"
+INSTALL_DIR="$HOME/.xpip"
+BINARY="$INSTALL_DIR/xpip"
 PORT=51789
 
 # ---------------------------------------------------------------------------
@@ -44,16 +44,16 @@ fi
 log "OK" "All prerequisites met."
 
 # ---------------------------------------------------------------------------
-#  Step 1 -- Stop any running pipdodge process
+#  Step 1 -- Stop any running xpip process
 # ---------------------------------------------------------------------------
 
 section "Step 1/3: Stop existing daemon"
 
-if pgrep -x pipdodge >/dev/null 2>&1; then
-    pkill -x pipdodge && sleep 0.5
-    log "1/3" "Killed running pipdodge process."
+if pgrep -x xpip >/dev/null 2>&1; then
+    pkill -x xpip && sleep 0.5
+    log "1/3" "Killed running xpip process."
 else
-    log "1/3" "No running pipdodge process found. Continuing."
+    log "1/3" "No running xpip process found. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ printf "\n"
 printf "  2. Start the daemon\n"
 printf "     %s &\n" "$BINARY"
 printf "     It listens on http://localhost:%s.\n" "$PORT"
-printf "     To stop it later:  pkill -x pipdodge\n"
+printf "     To stop it later:  pkill -x xpip\n"
 printf "\n"
 printf "  3. Load the Chrome extension\n"
 printf "     a. Open  chrome://extensions\n"

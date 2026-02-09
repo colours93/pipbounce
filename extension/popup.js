@@ -61,7 +61,7 @@ async function fetchStatus() {
       els.pip.className = "pip-status";
     }
   } catch {
-    els.status.textContent = "Daemon not running — start ~/.pipdodge/pipdodge";
+    els.status.textContent = "Daemon not running — start ~/.xpip/xpip";
     els.status.className = "status error";
   }
 }

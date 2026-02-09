@@ -252,7 +252,7 @@ class ControlServer {
 
 // MARK: - Dodge Daemon
 
-class PipDodgeDaemon {
+class XPipDaemon {
     private var lastDodgeTime = Date.distantPast
     private var interacting = false
     private var wasOnPip = false
@@ -264,7 +264,7 @@ class PipDodgeDaemon {
             AXIsProcessTrustedWithOptions(opts)
         }
 
-        print("PiP Dodge daemon started")
+        print("xpip daemon started")
 
         Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             self?.tick()
@@ -332,7 +332,7 @@ class PipDodgeDaemon {
 
 // MARK: - PID Lock
 
-let pidPath = NSString("~/.pipdodge/pipdodge.pid").expandingTildeInPath
+let pidPath = NSString("~/.xpip/xpip.pid").expandingTildeInPath
 
 func killExisting() {
     guard let pidStr = try? String(contentsOfFile: pidPath, encoding: .utf8),
@@ -361,7 +361,7 @@ writePid()
 let app = NSApplication.shared
 let server = ControlServer()
 server.start()
-let daemon = PipDodgeDaemon()
+let daemon = XPipDaemon()
 daemon.start()
 
 signal(SIGINT) { _ in

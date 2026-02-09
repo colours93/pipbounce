@@ -1,4 +1,4 @@
-# pip-mouse-aware
+# xpip
 
 A macOS tool that makes Picture-in-Picture windows dodge your mouse cursor. A Chrome extension triggers PiP for any video on any site, while a native Swift daemon watches your cursor and moves the PiP window out of the way -- unless you approach it from a corner, which lets you interact with playback controls.
 
@@ -8,7 +8,7 @@ The system has two cooperating parts:
 
 1. **Chrome extension** -- Activates PiP on any website using the browser's native `video.requestPictureInPicture()` API. Provides a popup UI for settings and a keyboard shortcut (Alt+P) for toggling PiP. Auto-PiP triggers when you switch tabs while a video is playing.
 
-2. **macOS daemon** (`~/.pipdodge/pipdodge`) -- A Swift process that polls the mouse position at 30fps via `CGEvent`, locates the PiP window through the macOS Accessibility API (`AXUIElement`), and decides whether to dodge or allow interaction based on the mouse's entry angle.
+2. **macOS daemon** (`~/.xpip/xpip`) -- A Swift process that polls the mouse position at 30fps via `CGEvent`, locates the PiP window through the macOS Accessibility API (`AXUIElement`), and decides whether to dodge or allow interaction based on the mouse's entry angle.
 
 **The dodge rule is simple:** if the mouse touches the PiP window from a side edge, the window jumps to the farthest screen corner. If the mouse enters through one of the four corner zones of the PiP window, dodging is suppressed and you can interact normally (play/pause, scrub, close). When the mouse leaves the window, the state resets.
 
@@ -34,7 +34,7 @@ xcode-select --install
 ./install.sh
 ```
 
-This compiles `PipDodge.swift` into `~/.pipdodge/pipdodge` and generates extension icons.
+This compiles `xpip.swift` into `~/.xpip/xpip` and generates extension icons.
 
 ### 2. Load the Chrome extension
 
@@ -47,14 +47,14 @@ This compiles `PipDodge.swift` into `~/.pipdodge/pipdodge` and generates extensi
 The daemon needs Accessibility access to find and move PiP windows.
 
 1. Open **System Settings > Privacy & Security > Accessibility**
-2. Add `~/.pipdodge/pipdodge` (or the terminal application you run it from)
+2. Add `~/.xpip/xpip` (or the terminal application you run it from)
 
 The daemon will prompt for this permission on first launch if it is not already granted.
 
 ### 4. Start the daemon
 
 ```
-~/.pipdodge/pipdodge
+~/.xpip/xpip
 ```
 
 The daemon runs in the foreground and logs to stdout. It listens on `http://127.0.0.1:51789` for settings changes from the extension.
@@ -96,7 +96,7 @@ A larger corner safe zone makes it easier to approach the PiP for interaction. A
 ## Project Structure
 
 ```
-daemon/PipDodge.swift        macOS daemon: mouse tracking, window movement, HTTP API
+daemon/xpip.swift        macOS daemon: mouse tracking, window movement, HTTP API
 extension/manifest.json      Chrome MV3 extension manifest
 extension/background.js      Keyboard shortcut handler (Alt+P)
 extension/content.js         PiP toggle logic (finds largest video, enters/exits PiP)
@@ -112,7 +112,7 @@ install.sh                   Compiles the daemon and generates extension icons
 +---------------------+          HTTP (localhost:51789)          +--------------------+
 |  Chrome Extension   | <-------------------------------------> |   Swift Daemon     |
 |                     |   GET /status                           |                    |
-|  popup.js           |   POST /settings {json}                 |  PipDodge.swift    |
+|  popup.js           |   POST /settings {json}                 |  xpip.swift    |
 |  background.js      |   POST /toggle                          |                    |
 |  content.js         |                                         |  - CGEvent poll    |
 |  autopip.js         |                                         |  - AXUIElement     |
@@ -133,7 +133,7 @@ The daemon runs a 30fps timer on the main run loop. Each tick:
 4. Corner entry: sets interaction mode (no dodge). Side entry: computes the farthest screen corner and moves the window there via `AXUIElementSetAttributeValue`.
 5. Mouse leaving the PiP resets state.
 
-A PID lock file at `~/.pipdodge/pipdodge.pid` ensures only one daemon instance runs. Starting a new instance sends `SIGTERM` to the old one.
+A PID lock file at `~/.xpip/xpip.pid` ensures only one daemon instance runs. Starting a new instance sends `SIGTERM` to the old one.
 
 ## Troubleshooting
 
@@ -144,7 +144,7 @@ Grant permission in System Settings > Privacy & Security > Accessibility. You ma
 The daemon identifies PiP windows by title ("Picture in Picture" or "Picture-in-Picture") or by heuristics for Document PiP windows (small, landscape, blank title). If your browser localizes the window title differently, detection may fail.
 
 **Extension says "Daemon not running"**
-Start the daemon manually with `~/.pipdodge/pipdodge`. It must be running for settings sync and status display to work. Dodge behavior depends entirely on the daemon; the extension only handles PiP activation.
+Start the daemon manually with `~/.xpip/xpip`. It must be running for settings sync and status display to work. Dodge behavior depends entirely on the daemon; the extension only handles PiP activation.
 
 ## License
 

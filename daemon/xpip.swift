@@ -1,5 +1,8 @@
 import Cocoa
 import ApplicationServices
+import QuartzCore
+import ScreenCaptureKit
+import CoreMedia
 
 // MARK: - Settings
 
@@ -8,6 +11,7 @@ class Settings {
     var cooldown: TimeInterval = 0.4
     var margin: CGFloat = 20
     var cornerSize: CGFloat = 100
+    var glow = true
 }
 
 let settings = Settings()
@@ -198,6 +202,7 @@ class ControlServer {
                 + "\"cooldown\":\(settings.cooldown),"
                 + "\"margin\":\(Int(settings.margin)),"
                 + "\"cornerSize\":\(Int(settings.cornerSize)),"
+                + "\"glow\":\(settings.glow),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -220,7 +225,8 @@ class ControlServer {
             return "{\"enabled\":\(settings.enabled),"
                 + "\"cooldown\":\(settings.cooldown),"
                 + "\"margin\":\(Int(settings.margin)),"
-                + "\"cornerSize\":\(Int(settings.cornerSize))}"
+                + "\"cornerSize\":\(Int(settings.cornerSize)),"
+                + "\"glow\":\(settings.glow)}"
         }
 
         return nil
@@ -236,11 +242,172 @@ class ControlServer {
         if let m = json["margin"] as? Double { settings.margin = CGFloat(m) }
         if let e = json["enabled"] as? Bool { settings.enabled = e }
         if let cs = json["cornerSize"] as? Double { settings.cornerSize = CGFloat(cs) }
+        if let g = json["glow"] as? Bool { settings.glow = g }
 
         print("Settings updated: cooldown=\(settings.cooldown)"
               + " margin=\(Int(settings.margin))"
               + " cornerSize=\(Int(settings.cornerSize))"
               + " enabled=\(settings.enabled)")
+    }
+}
+
+// MARK: - Audio Level Monitor
+
+class AudioMonitor: NSObject, SCStreamOutput, SCStreamDelegate {
+    private(set) var level: CGFloat = 0
+    private var stream: SCStream?
+    private var smoothed: CGFloat = 0
+
+    func start() {
+        Task {
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false),
+                  let display = content.displays.first else { return }
+
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let config = SCStreamConfiguration()
+            config.capturesAudio = true
+            config.sampleRate = 44100
+            config.channelCount = 1
+            config.width = 1
+            config.height = 1
+
+            let s = SCStream(filter: filter, configuration: config, delegate: self)
+            try? s.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInteractive))
+            try? await s.startCapture()
+            stream = s
+        }
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer buf: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .audio,
+              let block = CMSampleBufferGetDataBuffer(buf) else { return }
+        var length = 0
+        var ptr: UnsafeMutablePointer<Int8>?
+        CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil,
+                                    totalLengthOut: &length, dataPointerOut: &ptr)
+        guard let raw = ptr else { return }
+        let count = length / MemoryLayout<Float>.size
+        guard count > 0 else { return }
+        let floats = raw.withMemoryRebound(to: Float.self, capacity: count) {
+            UnsafeBufferPointer(start: $0, count: count)
+        }
+        var sum: Float = 0
+        for s in floats { sum += s * s }
+        let rms = CGFloat(sqrt(sum / Float(count)))
+        let scaled = min(rms * 10, 1.0)
+        smoothed = smoothed * 0.6 + scaled * 0.4
+        level = smoothed
+    }
+
+    func stream(_ s: SCStream, didStopWithError error: Error) {}
+}
+
+// MARK: - RGB Border Overlay
+
+class RGBBorder {
+    private var window: NSWindow?
+    private let borderWidth: CGFloat = 1.5
+    private let containerLayer = CALayer()
+    private let gradientLayer = CAGradientLayer()
+    private let maskLayer = CAShapeLayer()
+
+    func show(around rect: CGRect) {
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+        let flippedY = screen.frame.height - rect.maxY
+        let outerRect = rect.insetBy(dx: -borderWidth, dy: -borderWidth)
+        let frame = NSRect(x: outerRect.origin.x, y: flippedY - borderWidth,
+                           width: outerRect.width, height: outerRect.height)
+
+        if window == nil {
+            let w = NSWindow(contentRect: frame, styleMask: .borderless,
+                             backing: .buffered, defer: false)
+            w.isOpaque = false
+            w.backgroundColor = .clear
+            w.level = .floating
+            w.ignoresMouseEvents = true
+            w.hasShadow = false
+            w.collectionBehavior = [.canJoinAllSpaces, .stationary]
+
+            let view = NSView(frame: w.contentView!.bounds)
+            view.wantsLayer = true
+            w.contentView!.addSubview(view)
+
+            view.layer!.addSublayer(containerLayer)
+
+            gradientLayer.type = .conic
+            gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+            gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
+            gradientLayer.colors = [
+                NSColor.red.cgColor,
+                NSColor.yellow.cgColor,
+                NSColor.green.cgColor,
+                NSColor.cyan.cgColor,
+                NSColor.blue.cgColor,
+                NSColor.magenta.cgColor,
+                NSColor.red.cgColor,
+            ]
+            containerLayer.addSublayer(gradientLayer)
+
+            maskLayer.fillRule = .evenOdd
+            containerLayer.mask = maskLayer
+
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = 0
+            spin.toValue = 2 * Double.pi
+            spin.duration = 3
+            spin.repeatCount = .infinity
+            gradientLayer.add(spin, forKey: "spin")
+
+            w.orderFrontRegardless()
+            window = w
+        }
+
+        window?.setFrame(frame, display: false)
+
+        let viewBounds = NSRect(origin: .zero, size: frame.size)
+        containerLayer.frame = viewBounds
+        window?.contentView?.subviews.first?.frame = viewBounds
+
+        let diag = sqrt(viewBounds.width * viewBounds.width + viewBounds.height * viewBounds.height)
+        let gradSize = diag + 20
+        gradientLayer.frame = NSRect(
+            x: (viewBounds.width - gradSize) / 2,
+            y: (viewBounds.height - gradSize) / 2,
+            width: gradSize, height: gradSize)
+
+        let outer = NSBezierPath(roundedRect: viewBounds, xRadius: 6, yRadius: 6)
+        let inner = NSBezierPath(roundedRect: viewBounds.insetBy(dx: borderWidth, dy: borderWidth),
+                                 xRadius: 4, yRadius: 4)
+        let path = CGMutablePath()
+        path.addPath(outer.cgPath)
+        path.addPath(inner.cgPath)
+        maskLayer.path = path
+    }
+
+    func pulse(_ level: CGFloat) {
+        containerLayer.opacity = Float(0.2 + level * 0.8)
+    }
+
+    func hide() {
+        window?.orderOut(nil)
+        window = nil
+    }
+}
+
+private extension NSBezierPath {
+    var cgPath: CGPath {
+        let path = CGMutablePath()
+        var points = [CGPoint](repeating: .zero, count: 3)
+        for i in 0..<elementCount {
+            switch element(at: i, associatedPoints: &points) {
+            case .moveTo: path.move(to: points[0])
+            case .lineTo: path.addLine(to: points[0])
+            case .curveTo, .cubicCurveTo: path.addCurve(to: points[2], control1: points[0], control2: points[1])
+            case .closePath: path.closeSubpath()
+            default: break
+            }
+        }
+        return path
     }
 }
 
@@ -250,6 +417,8 @@ class XPipDaemon {
     private var lastDodgeTime = Date.distantPast
     private var interacting = false
     private var wasOnPip = false
+    private let rgbBorder = RGBBorder()
+    private let audioMonitor = AudioMonitor()
 
     private var animating = false
     private var animStart = CGPoint.zero
@@ -257,6 +426,7 @@ class XPipDaemon {
     private var animStartMach: UInt64 = 0
     private let animDuration: Double = 0.18
     private var animWindow: AXUIElement?
+    private var animSize = CGSize.zero
     private var animTimer: DispatchSourceTimer?
     private let animQueue = DispatchQueue(label: "xpip.anim", qos: .userInteractive)
     private static var timebaseInfo: mach_timebase_info_data_t = {
@@ -270,6 +440,7 @@ class XPipDaemon {
             print("Accessibility permission required")
         }
 
+        audioMonitor.start()
         print("xpip daemon started")
 
         Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -286,9 +457,16 @@ class XPipDaemon {
         guard let pip = findPipWindow() else {
             interacting = false
             wasOnPip = false
+            rgbBorder.hide()
             return
         }
 
+        if settings.glow {
+            rgbBorder.show(around: pip.bounds)
+            rgbBorder.pulse(audioMonitor.level)
+        } else {
+            rgbBorder.hide()
+        }
         let onPip = pip.bounds.contains(mousePos)
 
         if onPip && !wasOnPip {
@@ -320,6 +498,10 @@ class XPipDaemon {
 
         if let win = animWindow, let val = AXValueCreate(.cgPoint, &pos) {
             AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, val)
+            let size = self.animSize
+            DispatchQueue.main.async { [weak self] in
+                self?.rgbBorder.show(around: CGRect(origin: pos, size: size))
+            }
         }
 
         if t >= 1.0 {
@@ -343,6 +525,7 @@ class XPipDaemon {
 
         animStart = pip.bounds.origin
         animEnd = target
+        animSize = pip.bounds.size
         animStartMach = mach_absolute_time()
         animWindow = pip.axWindow
         animating = true

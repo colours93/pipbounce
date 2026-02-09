@@ -95,9 +95,13 @@ swiftc "$DAEMON_SRC" \
     -o "$BINARY" \
     -framework Cocoa \
     -framework ApplicationServices \
+    -framework QuartzCore \
+    -framework ScreenCaptureKit \
+    -framework CoreMedia \
     -O
 
 chmod +x "$BINARY"
+codesign --force --sign - "$APP_BUNDLE"
 log_ok "Built $APP_BUNDLE"
 
 # ---------------------------------------------------------------------------

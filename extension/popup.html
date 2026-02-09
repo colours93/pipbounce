@@ -124,6 +124,32 @@
       color: #a1a1aa;
     }
 
+    .hotkey-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-top: 1px solid #27272a;
+    }
+    .hotkey-btn {
+      background: #27272a;
+      color: #a1a1aa;
+      border: 1px solid #3f3f46;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .hotkey-btn:hover { border-color: #52525b; color: #fafafa; }
+    .hotkey-btn.recording {
+      border-color: #ef4444;
+      color: #fafafa;
+    }
+
     .status {
       display: flex;
       align-items: center;
@@ -175,6 +201,11 @@
       <input type="checkbox" id="glowToggle" checked>
       <span class="slider"></span>
     </label>
+  </div>
+
+  <div class="hotkey-row">
+    <span class="row-label">Toggle hotkey</span>
+    <button class="hotkey-btn" id="hotkeyBtn">⌘⇧D</button>
   </div>
 
   <div class="seg-row">

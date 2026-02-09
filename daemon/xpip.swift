@@ -12,9 +12,12 @@ class Settings {
     var margin: CGFloat = 20
     var cornerSize: CGFloat = 100
     var glow = true
+    var hotkeyCode: UInt16 = 2       // "d" key
+    var hotkeyFlags: UInt32 = 0x108  // cmd+shift
 }
 
 let settings = Settings()
+var audioMonitor: AudioMonitor!
 
 // MARK: - PiP Window Discovery
 
@@ -203,6 +206,9 @@ class ControlServer {
                 + "\"margin\":\(Int(settings.margin)),"
                 + "\"cornerSize\":\(Int(settings.cornerSize)),"
                 + "\"glow\":\(settings.glow),"
+                + "\"hotkeyCode\":\(settings.hotkeyCode),"
+                + "\"hotkeyFlags\":\(settings.hotkeyFlags),"
+                + "\"audioLevel\":\(String(format: "%.3f", audioMonitor.level)),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -243,6 +249,8 @@ class ControlServer {
         if let e = json["enabled"] as? Bool { settings.enabled = e }
         if let cs = json["cornerSize"] as? Double { settings.cornerSize = CGFloat(cs) }
         if let g = json["glow"] as? Bool { settings.glow = g }
+        if let hk = json["hotkeyCode"] as? Int { settings.hotkeyCode = UInt16(hk) }
+        if let hf = json["hotkeyFlags"] as? Int { settings.hotkeyFlags = UInt32(hf) }
 
         print("Settings updated: cooldown=\(settings.cooldown)"
               + " margin=\(Int(settings.margin))"
@@ -295,11 +303,42 @@ class AudioMonitor: NSObject, SCStreamOutput, SCStreamDelegate {
         for s in floats { sum += s * s }
         let rms = CGFloat(sqrt(sum / Float(count)))
         let scaled = min(rms * 10, 1.0)
-        smoothed = smoothed * 0.6 + scaled * 0.4
+        smoothed = smoothed * 0.3 + scaled * 0.7
         level = smoothed
     }
 
     func stream(_ s: SCStream, didStopWithError error: Error) {}
+}
+
+// MARK: - Global Hotkey
+
+func installHotkey() {
+    let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+    guard let tap = CGEvent.tapCreate(
+        tap: .cgSessionEventTap,
+        place: .headInsertEventTap,
+        options: .defaultTap,
+        eventsOfInterest: mask,
+        callback: { _, _, event, _ -> Unmanaged<CGEvent>? in
+            let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+            let flags = UInt32(event.flags.rawValue >> 16) & 0xFFF
+            if keyCode == settings.hotkeyCode && flags == settings.hotkeyFlags {
+                settings.enabled.toggle()
+                print(settings.enabled ? "Dodge enabled (hotkey)" : "Dodge paused (hotkey)")
+                return nil
+            }
+            return Unmanaged.passRetained(event)
+        },
+        userInfo: nil
+    ) else {
+        print("Failed to create hotkey tap")
+        return
+    }
+
+    let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
+    CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+    CGEvent.tapEnable(tap: tap, enable: true)
+    print("Hotkey registered")
 }
 
 // MARK: - RGB Border Overlay
@@ -385,7 +424,7 @@ class RGBBorder {
     }
 
     func pulse(_ level: CGFloat) {
-        containerLayer.opacity = Float(0.2 + level * 0.8)
+        containerLayer.opacity = Float(0.05 + level * 0.95)
     }
 
     func hide() {
@@ -418,7 +457,7 @@ class XPipDaemon {
     private var interacting = false
     private var wasOnPip = false
     private let rgbBorder = RGBBorder()
-    private let audioMonitor = AudioMonitor()
+    private let audio = AudioMonitor()
 
     private var animating = false
     private var animStart = CGPoint.zero
@@ -440,7 +479,9 @@ class XPipDaemon {
             print("Accessibility permission required")
         }
 
-        audioMonitor.start()
+        audioMonitor = audio
+        audio.start()
+        installHotkey()
         print("xpip daemon started")
 
         Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -463,7 +504,7 @@ class XPipDaemon {
 
         if settings.glow {
             rgbBorder.show(around: pip.bounds)
-            rgbBorder.pulse(audioMonitor.level)
+            rgbBorder.pulse(audio.level)
         } else {
             rgbBorder.hide()
         }

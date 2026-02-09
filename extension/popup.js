@@ -70,6 +70,9 @@ async function fetchStatus() {
     els.toggle.checked = data.enabled;
     els.glow.checked = data.glow;
     setActiveZone(closestZone(data.cornerSize));
+    if (data.hotkeyCode !== undefined) {
+      hotkeyBtn.textContent = formatHotkey(data.hotkeyCode, data.hotkeyFlags);
+    }
   } catch {
     els.statusLabel.textContent = "Offline — click to restart";
     els.status.className = "status offline";
@@ -99,6 +102,75 @@ zoneBtns.forEach((btn) => {
     setActiveZone(btn.dataset.value);
     updateSettings({ cornerSize: Number(btn.dataset.value) });
   });
+});
+
+// Hotkey recorder
+const hotkeyBtn = document.getElementById("hotkeyBtn");
+let recording = false;
+
+const KEY_NAMES = {
+  0:"A",1:"S",2:"D",3:"F",4:"H",5:"G",6:"Z",7:"X",8:"C",9:"V",
+  11:"B",12:"Q",13:"W",14:"E",15:"R",16:"Y",17:"T",18:"1",19:"2",
+  20:"3",21:"4",22:"6",23:"5",24:"=",25:"9",26:"7",27:"-",28:"8",
+  29:"0",30:"]",31:"O",32:"U",33:"[",34:"I",35:"P",37:"L",38:"J",
+  39:"'",40:"K",41:";",42:"\\",43:",",44:"/",45:"N",46:"M",47:".",
+  49:"Space",50:"`",53:"Esc",
+  122:"F1",120:"F2",99:"F3",118:"F4",96:"F5",97:"F6",98:"F7",
+  100:"F8",101:"F9",109:"F10",103:"F11",111:"F12",
+};
+
+function flagsToSymbols(f) {
+  let s = "";
+  if (f & 0x100) s += "\u2318";
+  if (f & 0x008) s += "\u2325";
+  if (f & 0x004) s += "\u2303";
+  if (f & 0x002) s += "\u21E7";
+  return s;
+}
+
+function formatHotkey(code, flags) {
+  return flagsToSymbols(flags) + (KEY_NAMES[code] || `key${code}`);
+}
+
+hotkeyBtn.addEventListener("click", () => {
+  recording = true;
+  hotkeyBtn.textContent = "Press keys...";
+  hotkeyBtn.classList.add("recording");
+});
+
+document.addEventListener("keydown", (e) => {
+  if (!recording) return;
+  e.preventDefault();
+  if (["Shift","Control","Alt","Meta"].includes(e.key)) return;
+
+  let flags = 0;
+  if (e.metaKey) flags |= 0x100;
+  if (e.altKey) flags |= 0x008;
+  if (e.ctrlKey) flags |= 0x004;
+  if (e.shiftKey) flags |= 0x002;
+
+  if (flags === 0) return;
+
+  const code = e.keyCode;
+  // Map browser keyCode to macOS virtual keycode
+  const MAC_CODES = {
+    65:0,66:11,67:8,68:2,69:14,70:3,71:5,72:4,73:34,74:38,75:40,
+    76:37,77:46,78:45,79:31,80:35,81:12,82:15,83:1,84:17,85:32,
+    86:9,87:13,88:7,89:16,90:6,
+    48:29,49:18,50:19,51:20,52:21,53:23,54:22,55:26,56:28,57:25,
+    32:49,27:53,192:50,189:27,187:24,219:33,221:30,186:41,222:39,
+    188:43,190:47,191:44,220:42,
+    112:122,113:120,114:99,115:118,116:96,117:97,118:98,119:100,
+    120:101,121:109,122:103,123:111,
+  };
+
+  const macCode = MAC_CODES[code];
+  if (macCode === undefined) return;
+
+  recording = false;
+  hotkeyBtn.classList.remove("recording");
+  hotkeyBtn.textContent = formatHotkey(macCode, flags);
+  updateSettings({ hotkeyCode: macCode, hotkeyFlags: flags });
 });
 
 fetchStatus();

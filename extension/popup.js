@@ -2,7 +2,9 @@ const API = "http://127.0.0.1:51789";
 
 const els = {
   status: document.getElementById("daemonStatus"),
+  statusLabel: document.querySelector("#daemonStatus .label"),
   toggle: document.getElementById("enableToggle"),
+  glow: document.getElementById("glowToggle"),
   seg: document.getElementById("cornerZone"),
 };
 
@@ -36,6 +38,14 @@ restartDaemon().then(() => {
 
 document.getElementById("pipBtn").addEventListener("click", triggerPip);
 
+els.status.addEventListener("click", async () => {
+  if (els.status.classList.contains("offline")) {
+    els.statusLabel.textContent = "Restarting...";
+    await restartDaemon();
+    fetchStatus();
+  }
+});
+
 function setActiveZone(value) {
   zoneBtns.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.value === String(value));
@@ -54,14 +64,15 @@ async function fetchStatus() {
     const res = await fetch(`${API}/status`);
     const data = await res.json();
 
-    els.status.textContent = data.pipActive ? "PiP active" : "Daemon running";
-    els.status.className = "status active";
+    els.statusLabel.textContent = data.pipActive ? "PiP active" : "Online";
+    els.status.className = "status online";
 
     els.toggle.checked = data.enabled;
+    els.glow.checked = data.glow;
     setActiveZone(closestZone(data.cornerSize));
   } catch {
-    els.status.textContent = "Daemon not running — start ~/.xpip/xpip";
-    els.status.className = "status error";
+    els.statusLabel.textContent = "Offline — click to restart";
+    els.status.className = "status offline";
   }
 }
 
@@ -77,6 +88,10 @@ async function updateSettings(changes) {
 
 els.toggle.addEventListener("change", () => {
   updateSettings({ enabled: els.toggle.checked });
+});
+
+els.glow.addEventListener("change", () => {
+  updateSettings({ glow: els.glow.checked });
 });
 
 zoneBtns.forEach((btn) => {

@@ -125,16 +125,35 @@
     }
 
     .status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
       font-size: 10px;
       font-weight: 300;
-      color: #3f3f46;
+      color: #52525b;
       text-align: center;
       padding-top: 10px;
       border-top: 1px solid #27272a;
       letter-spacing: 0.04em;
+      cursor: default;
+      transition: color 0.2s;
     }
-    .status.active { color: #a1a1aa; }
-    .status.error { color: #71717a; }
+    .status .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #52525b;
+      transition: background 0.3s;
+    }
+    .status.online .dot { background: #22c55e; }
+    .status.online { color: #a1a1aa; }
+    .status.offline .dot { background: #ef4444; }
+    .status.offline {
+      color: #71717a;
+      cursor: pointer;
+    }
+    .status.offline:hover { color: #a1a1aa; }
   </style>
 </head>
 <body>
@@ -150,6 +169,14 @@
     </label>
   </div>
 
+  <div class="row">
+    <span class="row-label">Glow</span>
+    <label class="toggle">
+      <input type="checkbox" id="glowToggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
   <div class="seg-row">
     <div class="seg-label">Corner zone</div>
     <div class="seg" id="cornerZone">
@@ -159,7 +186,7 @@
     </div>
   </div>
 
-  <div class="status" id="daemonStatus">Connecting...</div>
+  <div class="status" id="daemonStatus"><span class="dot"></span><span class="label">Connecting...</span></div>
 
   <script src="popup.js"></script>
 </body>

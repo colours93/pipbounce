@@ -43,7 +43,7 @@ function setActiveZone(value) {
 }
 
 function closestZone(px) {
-  const zones = [80, 150, 220];
+  const zones = [60, 100, 150];
   return zones.reduce((prev, curr) =>
     Math.abs(curr - px) < Math.abs(prev - px) ? curr : prev
   );

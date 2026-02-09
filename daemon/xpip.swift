@@ -8,7 +8,7 @@ class Settings {
     var dodgeDistance: CGFloat = 200
     var cooldown: TimeInterval = 0.4
     var margin: CGFloat = 20
-    var cornerSize: CGFloat = 150
+    var cornerSize: CGFloat = 100
 }
 
 let settings = Settings()

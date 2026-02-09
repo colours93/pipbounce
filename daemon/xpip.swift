@@ -329,7 +329,7 @@ class XPipDaemon {
     /// Returns true when the mouse is in one of the four corner zones of the PiP window,
     /// allowing the user to interact (resize/close) without triggering a dodge.
     private func isInPipCorner(mousePos: CGPoint, pipBounds: CGRect) -> Bool {
-        let cs = settings.cornerSize
+        let cs = min(settings.cornerSize, min(pipBounds.width, pipBounds.height) / 2)
         let nearLeft = mousePos.x - pipBounds.minX < cs
         let nearRight = pipBounds.maxX - mousePos.x < cs
         let nearTop = mousePos.y - pipBounds.minY < cs

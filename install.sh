@@ -11,7 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DAEMON_SRC="$SCRIPT_DIR/daemon/xpip.swift"
 EXTENSION_DIR="$SCRIPT_DIR/extension"
 INSTALL_DIR="$HOME/.xpip"
-BINARY="$INSTALL_DIR/xpip"
+APP_BUNDLE="$INSTALL_DIR/xpip.app"
+BINARY="$APP_BUNDLE/Contents/MacOS/xpip"
 PORT=51789
 
 # ---------------------------------------------------------------------------
@@ -69,9 +70,26 @@ fi
 
 section "Step 2/4: Compile daemon"
 
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$APP_BUNDLE/Contents/MacOS"
 
-log "2/3" "Compiling $DAEMON_SRC ..."
+cat > "$APP_BUNDLE/Contents/Info.plist" << 'INFOPLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.xpip.daemon</string>
+    <key>CFBundleName</key>
+    <string>xpip</string>
+    <key>CFBundleExecutable</key>
+    <string>xpip</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+INFOPLIST
+
+log "2/4" "Compiling $DAEMON_SRC ..."
 
 swiftc "$DAEMON_SRC" \
     -o "$BINARY" \
@@ -80,7 +98,7 @@ swiftc "$DAEMON_SRC" \
     -O
 
 chmod +x "$BINARY"
-log_ok "Built $BINARY"
+log_ok "Built $APP_BUNDLE"
 
 # ---------------------------------------------------------------------------
 #  Step 3 -- Generate extension icons
@@ -189,7 +207,7 @@ printf "NEXT STEPS\n"
 printf "\n"
 printf "  1. Grant Accessibility permission (if not already done)\n"
 printf "     System Settings -> Privacy & Security -> Accessibility\n"
-printf "     Click \"+\" and add:  %s\n" "$BINARY"
+printf "     Click \"+\" and add:  %s\n" "$APP_BUNDLE"
 printf "\n"
 printf "  2. Load the Chrome extension\n"
 printf "     a. Open  chrome://extensions\n"

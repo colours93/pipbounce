@@ -22,7 +22,18 @@ async function triggerPip() {
   }
 }
 
-triggerPip();
+async function restartDaemon() {
+  try {
+    await fetch(`${API}/restart`, { method: "POST" });
+  } catch {}
+  await new Promise((r) => setTimeout(r, 600));
+}
+
+restartDaemon().then(() => {
+  triggerPip();
+  fetchStatus();
+});
+
 document.getElementById("pipBtn").addEventListener("click", triggerPip);
 
 function setActiveZone(value) {

@@ -218,6 +218,14 @@ class ControlServer {
             return "{\"enabled\":\(settings.enabled)}"
         }
 
+        if firstLine.contains("POST /restart") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                cleanup()
+                exit(0)
+            }
+            return "{\"restarting\":true}"
+        }
+
         if firstLine.contains("POST /settings") {
             applySettings(from: body)
             return "{\"enabled\":\(settings.enabled),"

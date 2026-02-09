@@ -47,20 +47,27 @@ log "OK" "All prerequisites met."
 #  Step 1 -- Stop any running xpip process
 # ---------------------------------------------------------------------------
 
-section "Step 1/3: Stop existing daemon"
+section "Step 1/4: Stop existing daemon"
 
-if pgrep -x xpip >/dev/null 2>&1; then
+PLIST_LABEL="com.xpip.daemon"
+PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+
+if launchctl list "$PLIST_LABEL" >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+    sleep 0.5
+    log "1/4" "Stopped existing launchd agent."
+elif pgrep -x xpip >/dev/null 2>&1; then
     pkill -x xpip && sleep 0.5
-    log "1/3" "Killed running xpip process."
+    log "1/4" "Killed running xpip process."
 else
-    log "1/3" "No running xpip process found. Continuing."
+    log "1/4" "No running xpip process found. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
 #  Step 2 -- Compile the Swift daemon
 # ---------------------------------------------------------------------------
 
-section "Step 2/3: Compile daemon"
+section "Step 2/4: Compile daemon"
 
 mkdir -p "$INSTALL_DIR"
 
@@ -79,7 +86,7 @@ log_ok "Built $BINARY"
 #  Step 3 -- Generate extension icons
 # ---------------------------------------------------------------------------
 
-section "Step 3/3: Generate icons"
+section "Step 3/4: Generate icons"
 
 SCRIPT_DIR="$SCRIPT_DIR" python3 - << 'PYEOF'
 import struct, zlib, os
@@ -127,34 +134,71 @@ for s in [16, 48, 128]:
 PYEOF
 
 # ---------------------------------------------------------------------------
+#  Step 4 -- Install and start launchd agent
+# ---------------------------------------------------------------------------
+
+section "Step 4/4: Install launchd agent"
+
+mkdir -p "$HOME/Library/LaunchAgents"
+
+cat > "$PLIST_PATH" << PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$PLIST_LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$BINARY</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$INSTALL_DIR/xpip.log</string>
+    <key>StandardErrorPath</key>
+    <string>$INSTALL_DIR/xpip.log</string>
+</dict>
+</plist>
+PLISTEOF
+
+launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
+
+sleep 0.5
+
+if launchctl list "$PLIST_LABEL" >/dev/null 2>&1; then
+    log "4/4" "Daemon installed and running via launchd."
+    log_ok "It will auto-start on login and restart when triggered by the extension."
+else
+    log "4/4" "Launchd agent installed. Start manually: launchctl load $PLIST_PATH"
+fi
+
+# ---------------------------------------------------------------------------
 #  Done -- print setup instructions
 # ---------------------------------------------------------------------------
 
 printf "\n"
 printf "===================================================================\n"
-printf "  Installation complete.\n"
+printf "  Installation complete. Daemon is running.\n"
 printf "===================================================================\n"
 printf "\n"
 printf "NEXT STEPS\n"
 printf "\n"
-printf "  1. Grant Accessibility permission\n"
+printf "  1. Grant Accessibility permission (if not already done)\n"
 printf "     System Settings -> Privacy & Security -> Accessibility\n"
 printf "     Click \"+\" and add:  %s\n" "$BINARY"
-printf "     (The daemon cannot move windows without this permission.)\n"
 printf "\n"
-printf "  2. Start the daemon\n"
-printf "     %s &\n" "$BINARY"
-printf "     It listens on http://localhost:%s.\n" "$PORT"
-printf "     To stop it later:  pkill -x xpip\n"
-printf "\n"
-printf "  3. Load the Chrome extension\n"
+printf "  2. Load the Chrome extension\n"
 printf "     a. Open  chrome://extensions\n"
 printf "     b. Enable \"Developer mode\" (top-right toggle)\n"
 printf "     c. Click \"Load unpacked\" and select:\n"
 printf "        %s\n" "$EXTENSION_DIR"
 printf "\n"
-printf "  4. Try it out\n"
-printf "     Play a video, enter Picture-in-Picture (click the extension\n"
-printf "     icon or press Alt+P), then move your mouse toward the PiP\n"
-printf "     window. It dodges.\n"
+printf "  The daemon starts automatically on login and restarts each\n"
+printf "  time you open the extension popup. Logs: %s/xpip.log\n" "$INSTALL_DIR"
+printf "\n"
+printf "  To stop:  launchctl bootout gui/\$(id -u)/com.xpip.daemon\n"
 printf "\n"

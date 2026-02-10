@@ -115,8 +115,10 @@ document.getElementById("pongBtn").addEventListener("click", async () => {
     document.getElementById("pongBtn").textContent = data.pong
       ? "Stop PiP Pong"
       : "Pong in Picture";
-    if (data.pong)
+    if (data.pong) {
       document.getElementById("flappyBtn").textContent = "FlaPiPy Bird";
+      document.getElementById("bounceBtn").textContent = "Bounce";
+    }
   } catch {}
 });
 
@@ -131,8 +133,28 @@ document.getElementById("flappyBtn").addEventListener("click", async () => {
     document.getElementById("flappyBtn").textContent = data.flappy
       ? "Stop FlaPiPy"
       : "FlaPiPy Bird";
-    if (data.flappy)
+    if (data.flappy) {
       document.getElementById("pongBtn").textContent = "Pong in Picture";
+      document.getElementById("bounceBtn").textContent = "Bounce";
+    }
+  } catch {}
+});
+
+document.getElementById("bounceBtn").addEventListener("click", async () => {
+  if (!pipIsActive) {
+    await enterPip();
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  try {
+    const res = await fetch(`${API}/bounce`, { method: "POST" });
+    const data = await res.json();
+    document.getElementById("bounceBtn").textContent = data.bounce
+      ? "Stop Bounce"
+      : "Bounce";
+    if (data.bounce) {
+      document.getElementById("pongBtn").textContent = "Pong in Picture";
+      document.getElementById("flappyBtn").textContent = "FlaPiPy Bird";
+    }
   } catch {}
 });
 
@@ -308,6 +330,9 @@ async function fetchStatus() {
     document.getElementById("flappyBtn").textContent = data.flappy
       ? "Stop FlaPiPy"
       : "FlaPiPy Bird";
+    document.getElementById("bounceBtn").textContent = data.bounce
+      ? "Stop Bounce"
+      : "Bounce";
     if (data.glowColor) setActiveColor(data.glowColor);
 
     return data;

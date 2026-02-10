@@ -91,6 +91,7 @@ class ControlServer {
                 + "\"hotkeyFlags\":\(settings.hotkeyFlags),"
                 + "\"pong\":\(pong.active),"
                 + "\"flappy\":\(flappy.active),"
+                + "\"bounce\":\(bounce.active),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -126,6 +127,16 @@ class ControlServer {
             }
             sema.wait()
             return "{\"flappy\":\(flappy.active)}"
+        }
+
+        if firstLine.contains("POST /bounce") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                daemon.toggleGame(bounce)
+                sema.signal()
+            }
+            sema.wait()
+            return "{\"bounce\":\(bounce.active)}"
         }
 
         if firstLine.contains("POST /settings") {

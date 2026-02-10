@@ -38,7 +38,7 @@ class XPipDaemon {
     private func tick() {
         // Pong and dodge animation have their own high-frequency timers.
         // Bail immediately -- don't block main queue with expensive AX IPC.
-        if pong.active || flappy.active || animating { return }
+        if pong.active || flappy.active || bounce.active || animating { return }
 
         guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
@@ -138,7 +138,7 @@ class XPipDaemon {
     /// Toggle any MiniGame. Stops the current game if one is active.
     func toggleGame(_ game: MiniGame) {
         // Stop any running game first
-        let allGames: [MiniGame] = [pong, flappy]
+        let allGames: [MiniGame] = [pong, flappy, bounce]
         for g in allGames where g.active {
             g.stop()
             rgbBorder.tilt(0)

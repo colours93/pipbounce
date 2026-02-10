@@ -101,7 +101,14 @@ swiftc "$DAEMON_SRC" \
     -O
 
 chmod +x "$BINARY"
-codesign --force --sign - "$APP_BUNDLE"
+SIGN_ID=$(security find-identity -v -p codesigning | grep "xpip Dev" | head -1 | awk -F'"' '{print $2}')
+if [ -n "$SIGN_ID" ]; then
+    codesign --force --sign "$SIGN_ID" "$APP_BUNDLE"
+    log_ok "Signed with stable identity: $SIGN_ID"
+else
+    codesign --force --sign - "$APP_BUNDLE"
+    log_ok "Signed ad-hoc (run install once to create stable cert)"
+fi
 log_ok "Built $APP_BUNDLE"
 
 # ---------------------------------------------------------------------------

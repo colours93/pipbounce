@@ -8,7 +8,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DAEMON_SRC="$SCRIPT_DIR/daemon/xpip.swift"
+DAEMON_DIR="$SCRIPT_DIR/daemon"
 EXTENSION_DIR="$SCRIPT_DIR/extension"
 INSTALL_DIR="$HOME/.xpip"
 APP_BUNDLE="$INSTALL_DIR/xpip.app"
@@ -30,8 +30,9 @@ section()  { printf "\n--- %s %s\n" "$1" "$(printf '%*s' $((60 - ${#1})) '' | tr
 
 section "Pre-flight"
 
-if [ ! -f "$DAEMON_SRC" ]; then
-    bail "Source file not found: $DAEMON_SRC"
+SWIFT_FILES=("$DAEMON_DIR"/*.swift)
+if [ ${#SWIFT_FILES[@]} -eq 0 ]; then
+    bail "No Swift source files found in $DAEMON_DIR"
 fi
 
 if ! command -v swiftc >/dev/null 2>&1; then
@@ -89,16 +90,13 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'INFOPLIST'
 </plist>
 INFOPLIST
 
-log "2/4" "Compiling $DAEMON_SRC ..."
+log "2/4" "Compiling ${#SWIFT_FILES[@]} Swift files ..."
 
-swiftc "$DAEMON_SRC" \
+swiftc "${SWIFT_FILES[@]}" \
     -o "$BINARY" \
     -framework Cocoa \
     -framework ApplicationServices \
     -framework QuartzCore \
-    -framework ScreenCaptureKit \
-    -framework CoreMedia \
-    -framework CoreVideo \
     -O
 
 chmod +x "$BINARY"

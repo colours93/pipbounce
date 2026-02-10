@@ -3,6 +3,7 @@ import ApplicationServices
 import QuartzCore
 import ScreenCaptureKit
 import CoreMedia
+import CoreVideo
 
 // MARK: - Settings
 
@@ -259,11 +260,7 @@ class ControlServer {
         if firstLine.contains("POST /pong") {
             let sema = DispatchSemaphore(value: 0)
             DispatchQueue.main.async {
-                if pong.active {
-                    pong.stop()
-                } else {
-                    pong.start(screen: getScreenFrame())
-                }
+                daemon.togglePong()
                 sema.signal()
             }
             sema.wait()
@@ -537,7 +534,11 @@ class RGBBorder {
             gradientLayer.colors = Self.colorSets[color] ?? Self.colorSets["rainbow"]!
         }
 
-        window?.setFrame(nsFrame, display: false)
+        window?.setFrame(nsFrame, display: true)
+
+        // Disable implicit CoreAnimation transitions — all updates must be instant
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
 
         let viewBounds = NSRect(origin: .zero, size: nsFrame.size)
         containerLayer.frame = viewBounds
@@ -557,6 +558,8 @@ class RGBBorder {
         path.addPath(outer.cgPath)
         path.addPath(inner.cgPath)
         maskLayer.path = path
+
+        CATransaction.commit()
     }
 
     func pulse(_ level: CGFloat) {
@@ -593,7 +596,7 @@ class PongGame {
     var lastBounds = CGRect.zero
 
     private var velocity = CGPoint.zero
-    private let baseSpeed: CGFloat = 420.0   // pixels per second
+    private let baseSpeed: CGFloat = 420.0
     private let maxSpeed: CGFloat = 900.0
 
     private var playerPaddle: NSWindow?
@@ -608,18 +611,54 @@ class PongGame {
     private var playerScore = 0
     private var aiScore = 0
     private var aiY: CGFloat = 0
-    private let aiSpeed: CGFloat = 300.0     // pixels per second
+    private let aiSpeed: CGFloat = 300.0
 
-    private var pauseUntil: Date?
-    private var lastTick: Date?
+    private var pauseUntil: UInt64 = 0
+    private var lastMach: UInt64 = 0
     private var ballPos = CGPoint.zero
+    private var scoreChanged = false
 
-    func start(screen: CGRect) {
+    // Cached PiP reference — avoids findPipWindow() every frame
+    private var cachedAXWindow: AXUIElement?
+    private var cachedPipSize = CGSize.zero
+
+    // Direct references for border/audio
+    private var borderRef: RGBBorder?
+    private var audioRef: AudioMonitor?
+
+    // High-frequency timer on main queue — keeps PiP + border perfectly synchronized
+    private var gameTimer: DispatchSourceTimer?
+
+    private static var timebaseInfo: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    private func machToSeconds(_ ticks: UInt64) -> CGFloat {
+        let info = Self.timebaseInfo
+        return CGFloat(Double(ticks) * Double(info.numer) / Double(info.denom) / 1_000_000_000)
+    }
+
+    private func secondsToMach(_ sec: Double) -> UInt64 {
+        let info = Self.timebaseInfo
+        return UInt64(sec * 1_000_000_000) * UInt64(info.denom) / UInt64(info.numer)
+    }
+
+    func start(screen: CGRect, pip: PipWindowInfo, border: RGBBorder, audio: AudioMonitor) {
         playerScore = 0
         aiScore = 0
+        scoreChanged = false
         paddleHeight = screen.height * 0.15
         aiY = screen.midY - paddleHeight / 2
-        lastTick = Date()
+        lastMach = mach_absolute_time()
+        pauseUntil = 0
+
+        cachedAXWindow = pip.axWindow
+        cachedPipSize = pip.bounds.size
+        ballPos = pip.bounds.origin
+        borderRef = border
+        audioRef = audio
 
         launchBall(direction: Bool.random() ? 1 : -1)
 
@@ -631,32 +670,46 @@ class PongGame {
 
         active = true
         print("Pong started")
+
+        // 500fps on main queue — PiP move + border move happen in the SAME call,
+        // microseconds apart, so they never desync
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        t.schedule(deadline: .now(), repeating: .milliseconds(2), leeway: .microseconds(100))
+        t.setEventHandler { [weak self] in self?.gameTick() }
+        gameTimer = t
+        t.resume()
     }
 
-    /// Returns the new PiP bounds after moving. Border should use this, not AX.
-    func tick(pip: PipWindowInfo, mousePos: CGPoint, screen: CGRect) -> CGRect {
-        let size = pip.bounds.size
-        let now = Date()
-        let dt = CGFloat(now.timeIntervalSince(lastTick ?? now))
-        lastTick = now
+    private func gameTick() {
+        guard active, let axWindow = cachedAXWindow else { return }
 
-        // On first tick, sync position from AX
-        if ballPos == .zero { ballPos = pip.bounds.origin }
+        guard let event = CGEvent(source: nil) else { return }
+        let mousePos = event.location
+        let screen = getScreenFrame()
+        let size = cachedPipSize
 
-        // Pause after score
-        if let until = pauseUntil {
+        let now = mach_absolute_time()
+        let dt = min(machToSeconds(now - lastMach), 0.05)
+        lastMach = now
+
+        // Pause after score — paddles still track mouse
+        if pauseUntil > 0 {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             updatePaddlePositions(playerY: mousePos.y - paddleHeight / 2, screen: screen)
             let bounds = CGRect(origin: ballPos, size: size)
             lastBounds = bounds
-            if now < until { return bounds }
-            pauseUntil = nil
+            updateBorder(bounds)
+            if scoreChanged { updateScore(); scoreChanged = false }
+            CATransaction.commit()
+            if now < pauseUntil { return }
+            pauseUntil = 0
         }
 
-        // Move ball (delta-time)
+        // Physics
         ballPos.x += velocity.x * dt
         ballPos.y += velocity.y * dt
 
-        // Bounce top/bottom
         if ballPos.y <= screen.minY {
             ballPos.y = screen.minY
             velocity.y = abs(velocity.y)
@@ -666,7 +719,6 @@ class PongGame {
             velocity.y = -abs(velocity.y)
         }
 
-        // Clamp speed
         let spd = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
         if spd > maxSpeed {
             let s = maxSpeed / spd
@@ -674,11 +726,9 @@ class PongGame {
             velocity.y *= s
         }
 
-        // Player paddle (left)
         let pX = screen.minX + paddleMargin
         let pY = max(screen.minY, min(screen.maxY - paddleHeight, mousePos.y - paddleHeight / 2))
 
-        // AI paddle (right)
         let aiX = screen.maxX - paddleMargin - paddleWidth
         let ballCY = ballPos.y + size.height / 2
         let aiTarget = ballCY - paddleHeight / 2
@@ -686,7 +736,6 @@ class PongGame {
         aiY += max(-aiSpeed * dt, min(aiSpeed * dt, aiDiff))
         aiY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
 
-        // Player paddle collision
         if ballPos.x <= pX + paddleWidth && ballPos.x >= pX - size.width / 2 && velocity.x < 0 {
             if ballCY >= pY && ballCY <= pY + paddleHeight {
                 velocity.x = abs(velocity.x) * 1.05
@@ -696,7 +745,6 @@ class PongGame {
             }
         }
 
-        // AI paddle collision
         if ballPos.x + size.width >= aiX && ballPos.x + size.width <= aiX + paddleWidth + size.width / 2 && velocity.x > 0 {
             if ballCY >= aiY && ballCY <= aiY + paddleHeight {
                 velocity.x = -(abs(velocity.x) * 1.05)
@@ -706,41 +754,63 @@ class PongGame {
             }
         }
 
-        // Score - ball past left
         if ballPos.x + size.width < screen.minX - 30 {
             aiScore += 1
+            scoreChanged = true
             ballPos = CGPoint(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2)
             launchBall(direction: 1)
-            pauseUntil = Date().addingTimeInterval(0.8)
+            pauseUntil = mach_absolute_time() + secondsToMach(0.8)
         }
 
-        // Score - ball past right
         if ballPos.x > screen.maxX + 30 {
             playerScore += 1
+            scoreChanged = true
             ballPos = CGPoint(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2)
             launchBall(direction: -1)
-            pauseUntil = Date().addingTimeInterval(0.8)
+            pauseUntil = mach_absolute_time() + secondsToMach(0.8)
         }
 
-        // Move PiP
+        // Move PiP THEN border — same thread, microseconds apart, perfectly synced
         var newPos = ballPos
         if let val = AXValueCreate(.cgPoint, &newPos) {
-            AXUIElementSetAttributeValue(pip.axWindow, kAXPositionAttribute as CFString, val)
+            let err = AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, val)
+            if err != .success {
+                stop()
+                return
+            }
         }
 
         let bounds = CGRect(origin: ballPos, size: size)
         lastBounds = bounds
 
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         updatePaddlePositions(playerY: pY, screen: screen)
-        updateScore()
+        updateBorder(bounds)
+        if scoreChanged { updateScore(); scoreChanged = false }
+        CATransaction.commit()
+    }
 
-        return bounds
+    private func updateBorder(_ bounds: CGRect) {
+        if settings.glow, let border = borderRef {
+            border.show(around: bounds)
+            border.pulse(audioRef?.level ?? 0)
+        } else {
+            borderRef?.hide()
+        }
     }
 
     func stop() {
+        gameTimer?.cancel()
+        gameTimer = nil
         active = false
         ballPos = .zero
-        lastTick = nil
+        lastMach = 0
+        cachedAXWindow = nil
+        borderRef?.hide()
+        borderRef = nil
+        audioRef = nil
+
         let pw = playerPaddle, aw = aiPaddle, sw = scoreOverlay
         let cleanup = {
             pw?.orderOut(nil)
@@ -781,6 +851,7 @@ class PongGame {
         sw.level = .floating
         sw.ignoresMouseEvents = true
         sw.hasShadow = false
+        sw.collectionBehavior = [.canJoinAllSpaces, .stationary]
 
         let label = NSTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 44))
         label.isEditable = false
@@ -804,6 +875,7 @@ class PongGame {
         w.level = .floating
         w.ignoresMouseEvents = true
         w.hasShadow = false
+        w.collectionBehavior = [.canJoinAllSpaces, .stationary]
         w.contentView!.wantsLayer = true
         w.contentView!.layer!.backgroundColor = NSColor.white.cgColor
         w.contentView!.layer!.cornerRadius = paddleWidth / 2
@@ -816,12 +888,12 @@ class PongGame {
 
         playerPaddle?.setFrame(
             NSRect(x: screen.minX + paddleMargin, y: h - playerY - paddleHeight,
-                   width: paddleWidth, height: paddleHeight), display: false)
+                   width: paddleWidth, height: paddleHeight), display: true)
 
         let aY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
         aiPaddle?.setFrame(
             NSRect(x: screen.maxX - paddleMargin - paddleWidth, y: h - aY - paddleHeight,
-                   width: paddleWidth, height: paddleHeight), display: false)
+                   width: paddleWidth, height: paddleHeight), display: true)
     }
 
     private func updateScore() {
@@ -845,8 +917,8 @@ class XPipDaemon {
     private let animDuration: Double = 0.18
     private var animWindow: AXUIElement?
     private var animSize = CGSize.zero
+    private var animCurrentPos = CGPoint.zero  // computed position, updated by stepAnimation
     private var animTimer: DispatchSourceTimer?
-    private let animQueue = DispatchQueue(label: "xpip.anim", qos: .userInteractive)
     private static var timebaseInfo: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -869,6 +941,10 @@ class XPipDaemon {
     }
 
     private func tick() {
+        // Pong and dodge animation have their own high-frequency timers.
+        // Bail immediately — don't block main queue with expensive AX IPC.
+        if pong.active || animating { return }
+
         guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
 
@@ -876,11 +952,10 @@ class XPipDaemon {
             interacting = false
             wasOnPip = false
             rgbBorder.hide()
-            if pong.active { pong.stop() }
             return
         }
 
-        // Always track border at 60fps, even during animation or drag
+        // Normal mode — border tracks real AX position
         if settings.glow {
             rgbBorder.show(around: pip.bounds)
             rgbBorder.pulse(audio.level)
@@ -888,20 +963,7 @@ class XPipDaemon {
             rgbBorder.hide()
         }
 
-        // Pong mode takes over from dodge
-        if pong.active {
-            let screen = getScreenFrame()
-            let newBounds = pong.tick(pip: pip, mousePos: mousePos, screen: screen)
-            // Update border using pong's exact position (no AX read lag)
-            if settings.glow {
-                rgbBorder.show(around: newBounds)
-                rgbBorder.pulse(audio.level)
-            }
-            return
-        }
-
-        // Skip dodge logic during animation or when disabled
-        guard !animating, settings.enabled else { return }
+        guard settings.enabled else { return }
 
         let onPip = pip.bounds.contains(mousePos)
 
@@ -931,9 +993,17 @@ class XPipDaemon {
         let x = animStart.x + (animEnd.x - animStart.x) * CGFloat(ease)
         let y = animStart.y + (animEnd.y - animStart.y) * CGFloat(ease)
         var pos = CGPoint(x: x, y: y)
+        animCurrentPos = pos
 
+        // Move PiP via AX, then IMMEDIATELY move border — same call, microseconds apart
         if let win = animWindow, let val = AXValueCreate(.cgPoint, &pos) {
             AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, val)
+        }
+        if settings.glow {
+            rgbBorder.show(around: CGRect(origin: pos, size: animSize))
+            rgbBorder.pulse(audio.level)
+        } else {
+            rgbBorder.hide()
         }
 
         if t >= 1.0 {
@@ -958,17 +1028,27 @@ class XPipDaemon {
         animStart = pip.bounds.origin
         animEnd = target
         animSize = pip.bounds.size
+        animCurrentPos = pip.bounds.origin
         animStartMach = mach_absolute_time()
         animWindow = pip.axWindow
         animating = true
         lastDodgeTime = now
 
         animTimer?.cancel()
-        let t = DispatchSource.makeTimerSource(flags: .strict, queue: animQueue)
-        t.schedule(deadline: .now(), repeating: .milliseconds(8), leeway: .microseconds(500))
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        t.schedule(deadline: .now(), repeating: .milliseconds(2), leeway: .microseconds(100))
         t.setEventHandler { [weak self] in self?.stepAnimation() }
         animTimer = t
         t.resume()
+    }
+
+    func togglePong() {
+        if pong.active {
+            pong.stop()
+            rgbBorder.hide()
+        } else if let pip = findPipWindow() {
+            pong.start(screen: getScreenFrame(), pip: pip, border: rgbBorder, audio: audio)
+        }
     }
 
     private func isInPipCorner(mousePos: CGPoint, pipBounds: CGRect) -> Bool {
@@ -1005,6 +1085,9 @@ func cleanup() {
 }
 
 // MARK: - Entry Point
+
+setbuf(stdout, nil)
+setbuf(stderr, nil)
 
 killExisting()
 writePid()

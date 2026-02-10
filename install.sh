@@ -98,6 +98,7 @@ swiftc "$DAEMON_SRC" \
     -framework QuartzCore \
     -framework ScreenCaptureKit \
     -framework CoreMedia \
+    -framework CoreVideo \
     -O
 
 chmod +x "$BINARY"

@@ -26,11 +26,31 @@ struct PipWindowInfo {
     let axWindow: AXUIElement
 }
 
+/// Returns rects of all windows above normal level (floating/PiP).
+private func floatingWindowRects() -> [CGRect] {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+        return []
+    }
+    var rects: [CGRect] = []
+    for info in list {
+        guard let layer = info[kCGWindowLayer as String] as? Int, layer > 0,
+              let bd = info[kCGWindowBounds as String] as? [String: Any] else { continue }
+        let x = (bd["X"] as? NSNumber)?.doubleValue ?? 0
+        let y = (bd["Y"] as? NSNumber)?.doubleValue ?? 0
+        let w = (bd["Width"] as? NSNumber)?.doubleValue ?? 0
+        let h = (bd["Height"] as? NSNumber)?.doubleValue ?? 0
+        rects.append(CGRect(x: x, y: y, width: w, height: h))
+    }
+    return rects
+}
+
 func findPipWindow() -> PipWindowInfo? {
     let chromeApps = NSWorkspace.shared.runningApplications.filter {
         ($0.localizedName ?? "").contains("Chrome")
             || ($0.bundleIdentifier ?? "").contains("chrome")
     }
+
+    let floating = floatingWindowRects()
 
     for app in chromeApps {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
@@ -39,7 +59,7 @@ func findPipWindow() -> PipWindowInfo? {
               let windows = windowsRef as? [AXUIElement] else { continue }
 
         for window in windows {
-            if let info = extractPipInfo(from: window) {
+            if let info = extractPipInfo(from: window, floating: floating) {
                 return info
             }
         }
@@ -48,7 +68,7 @@ func findPipWindow() -> PipWindowInfo? {
     return nil
 }
 
-private func extractPipInfo(from window: AXUIElement) -> PipWindowInfo? {
+private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> PipWindowInfo? {
     var titleRef: CFTypeRef?
     _ = AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
     let title = (titleRef as? String) ?? ""
@@ -69,8 +89,14 @@ private func extractPipInfo(from window: AXUIElement) -> PipWindowInfo? {
     let isPip = titleLower.contains("picture in picture")
         || titleLower.contains("picture-in-picture")
 
-    // Document PiP windows appear as small, always-on-top, landscape windows with a blank title.
+    // Document PiP: untitled, landscape, AND confirmed floating (above normal window level).
+    // The floating check prevents matching Chrome popups like the omnibox dropdown.
+    let matchesFloat = floating.contains { r in
+        abs(r.origin.x - pos.x) < 3 && abs(r.origin.y - pos.y) < 3
+            && abs(r.width - size.width) < 3 && abs(r.height - size.height) < 3
+    }
     let isDocPip = (title == "" || title == "about:blank")
+        && matchesFloat
         && size.width >= 200 && size.width <= 800
         && size.height >= 100 && size.height <= 600
         && (size.width / size.height) > 1.2
@@ -265,49 +291,101 @@ class AudioMonitor: NSObject, SCStreamOutput, SCStreamDelegate {
     private(set) var level: CGFloat = 0
     private var stream: SCStream?
     private var smoothed: CGFloat = 0
+    private var gotFirstBuffer = false
 
     func start() {
-        Task {
-            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false),
-                  let display = content.displays.first else { return }
-
-            let filter = SCContentFilter(display: display, excludingWindows: [])
-            let config = SCStreamConfiguration()
-            config.capturesAudio = true
-            config.sampleRate = 44100
-            config.channelCount = 1
-            config.width = 1
-            config.height = 1
-
-            let s = SCStream(filter: filter, configuration: config, delegate: self)
-            try? s.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInteractive))
-            try? await s.startCapture()
-            stream = s
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.startAsync()
         }
     }
 
+    private func startAsync() {
+        let sema = DispatchSemaphore(value: 0)
+        var content: SCShareableContent?
+        var fetchError: Error?
+
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { result, error in
+            content = result
+            fetchError = error
+            sema.signal()
+        }
+        sema.wait()
+
+        if let error = fetchError {
+            print("Audio: failed to get content - \(error.localizedDescription)")
+            return
+        }
+        guard let display = content?.displays.first else {
+            print("Audio: no displays found")
+            return
+        }
+
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+        let config = SCStreamConfiguration()
+        config.capturesAudio = true
+        config.sampleRate = 48000
+        config.channelCount = 2
+        config.width = 2
+        config.height = 2
+
+        let s = SCStream(filter: filter, configuration: config, delegate: self)
+        do {
+            try s.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInteractive))
+        } catch {
+            print("Audio: failed to add output - \(error.localizedDescription)")
+            return
+        }
+
+        let startSema = DispatchSemaphore(value: 0)
+        var startError: Error?
+        s.startCapture { error in
+            startError = error
+            startSema.signal()
+        }
+        startSema.wait()
+
+        if let error = startError {
+            print("Audio: failed to start capture - \(error.localizedDescription)")
+            return
+        }
+
+        stream = s
+        print("Audio: stream started")
+    }
+
     func stream(_ stream: SCStream, didOutputSampleBuffer buf: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .audio,
-              let block = CMSampleBufferGetDataBuffer(buf) else { return }
+        guard type == .audio else { return }
+
+        if !gotFirstBuffer {
+            gotFirstBuffer = true
+            print("Audio: receiving buffers")
+        }
+
+        guard let block = CMSampleBufferGetDataBuffer(buf) else { return }
         var length = 0
         var ptr: UnsafeMutablePointer<Int8>?
         CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil,
                                     totalLengthOut: &length, dataPointerOut: &ptr)
-        guard let raw = ptr else { return }
-        let count = length / MemoryLayout<Float>.size
-        guard count > 0 else { return }
-        let floats = raw.withMemoryRebound(to: Float.self, capacity: count) {
-            UnsafeBufferPointer(start: $0, count: count)
-        }
+        guard let raw = ptr, length > 0 else { return }
+
+        let floatCount = length / MemoryLayout<Float>.size
+        guard floatCount > 0 else { return }
+
         var sum: Float = 0
-        for s in floats { sum += s * s }
-        let rms = CGFloat(sqrt(sum / Float(count)))
-        let scaled = min(rms * 10, 1.0)
+        raw.withMemoryRebound(to: Float.self, capacity: floatCount) { floats in
+            for i in 0..<floatCount {
+                sum += floats[i] * floats[i]
+            }
+        }
+        let rms = CGFloat(sqrt(sum / Float(floatCount)))
+        let scaled = min(rms * 8, 1.0)
         smoothed = smoothed * 0.3 + scaled * 0.7
         level = smoothed
     }
 
-    func stream(_ s: SCStream, didStopWithError error: Error) {}
+    func stream(_ s: SCStream, didStopWithError error: Error) {
+        print("Audio: stream stopped - \(error.localizedDescription)")
+    }
 }
 
 // MARK: - Global Hotkey
@@ -345,7 +423,7 @@ func installHotkey() {
 
 class RGBBorder {
     private var window: NSWindow?
-    private let borderWidth: CGFloat = 1.5
+    private let borderWidth: CGFloat = 2.5
     private let containerLayer = CALayer()
     private let gradientLayer = CAGradientLayer()
     private let maskLayer = CAShapeLayer()
@@ -424,7 +502,7 @@ class RGBBorder {
     }
 
     func pulse(_ level: CGFloat) {
-        containerLayer.opacity = Float(0.05 + level * 0.95)
+        containerLayer.opacity = Float(0.5 + level * 0.5)
     }
 
     func hide() {
@@ -484,15 +562,13 @@ class XPipDaemon {
         installHotkey()
         print("xpip daemon started")
 
-        Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
     }
 
     private func tick() {
-        guard !animating, settings.enabled,
-              let event = CGEvent(source: nil) else { return }
-
+        guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
 
         guard let pip = findPipWindow() else {
@@ -502,12 +578,17 @@ class XPipDaemon {
             return
         }
 
+        // Always track border at 60fps, even during animation or drag
         if settings.glow {
             rgbBorder.show(around: pip.bounds)
             rgbBorder.pulse(audio.level)
         } else {
             rgbBorder.hide()
         }
+
+        // Skip dodge logic during animation or when disabled
+        guard !animating, settings.enabled else { return }
+
         let onPip = pip.bounds.contains(mousePos)
 
         if onPip && !wasOnPip {
@@ -539,10 +620,6 @@ class XPipDaemon {
 
         if let win = animWindow, let val = AXValueCreate(.cgPoint, &pos) {
             AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, val)
-            let size = self.animSize
-            DispatchQueue.main.async { [weak self] in
-                self?.rgbBorder.show(around: CGRect(origin: pos, size: size))
-            }
         }
 
         if t >= 1.0 {

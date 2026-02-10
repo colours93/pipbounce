@@ -3,7 +3,7 @@ import QuartzCore
 
 class RGBBorder {
     private var window: NSWindow?
-    private let borderWidth: CGFloat = 1.8
+    private let borderWidth: CGFloat = 1.0
     private let containerLayer = CALayer()
     private let gradientLayer = CAGradientLayer()
     private let maskLayer = CAShapeLayer()
@@ -129,9 +129,9 @@ class RGBBorder {
         gradientLayer.bounds = CGRect(origin: .zero, size: CGSize(width: gradSize, height: gradSize))
         gradientLayer.position = CGPoint(x: borderRect.midX, y: borderRect.midY)
 
-        let outer = NSBezierPath(roundedRect: borderRect, xRadius: 6, yRadius: 6)
+        let outer = NSBezierPath(roundedRect: borderRect, xRadius: 3, yRadius: 3)
         let inner = NSBezierPath(roundedRect: borderRect.insetBy(dx: borderWidth, dy: borderWidth),
-                                 xRadius: 4, yRadius: 4)
+                                 xRadius: 2, yRadius: 2)
         let path = CGMutablePath()
         path.addPath(outer.cgPath)
         path.addPath(inner.cgPath)

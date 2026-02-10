@@ -12,12 +12,14 @@ class Settings {
     var margin: CGFloat = 20
     var cornerSize: CGFloat = 100
     var glow = true
+    var glowColor = "rainbow"        // rainbow, blue, red, purple, green
     var hotkeyCode: UInt16 = 2       // "d" key
     var hotkeyFlags: UInt32 = 0x108  // cmd+shift
 }
 
 let settings = Settings()
 var audioMonitor: AudioMonitor!
+let pong = PongGame()
 
 // MARK: - PiP Window Discovery
 
@@ -232,9 +234,11 @@ class ControlServer {
                 + "\"margin\":\(Int(settings.margin)),"
                 + "\"cornerSize\":\(Int(settings.cornerSize)),"
                 + "\"glow\":\(settings.glow),"
+                + "\"glowColor\":\"\(settings.glowColor)\","
                 + "\"hotkeyCode\":\(settings.hotkeyCode),"
                 + "\"hotkeyFlags\":\(settings.hotkeyFlags),"
                 + "\"audioLevel\":\(String(format: "%.3f", audioMonitor.level)),"
+                + "\"pong\":\(pong.active),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -250,6 +254,20 @@ class ControlServer {
                 exit(0)
             }
             return "{\"restarting\":true}"
+        }
+
+        if firstLine.contains("POST /pong") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                if pong.active {
+                    pong.stop()
+                } else {
+                    pong.start(screen: getScreenFrame())
+                }
+                sema.signal()
+            }
+            sema.wait()
+            return "{\"pong\":\(pong.active)}"
         }
 
         if firstLine.contains("POST /settings") {
@@ -275,6 +293,7 @@ class ControlServer {
         if let e = json["enabled"] as? Bool { settings.enabled = e }
         if let cs = json["cornerSize"] as? Double { settings.cornerSize = CGFloat(cs) }
         if let g = json["glow"] as? Bool { settings.glow = g }
+        if let gc = json["glowColor"] as? String { settings.glowColor = gc }
         if let hk = json["hotkeyCode"] as? Int { settings.hotkeyCode = UInt16(hk) }
         if let hf = json["hotkeyFlags"] as? Int { settings.hotkeyFlags = UInt32(hf) }
 
@@ -427,16 +446,57 @@ class RGBBorder {
     private let containerLayer = CALayer()
     private let gradientLayer = CAGradientLayer()
     private let maskLayer = CAShapeLayer()
+    private var currentColor = ""
 
+    private static let colorSets: [String: [CGColor]] = [
+        "rainbow": [
+            NSColor.red.cgColor, NSColor.yellow.cgColor, NSColor.green.cgColor,
+            NSColor.cyan.cgColor, NSColor.blue.cgColor, NSColor.magenta.cgColor,
+            NSColor.red.cgColor,
+        ],
+        "blue": [
+            NSColor(red: 0.2, green: 0.5, blue: 1.0, alpha: 1).cgColor,
+            NSColor(red: 0.1, green: 0.8, blue: 1.0, alpha: 1).cgColor,
+            NSColor(red: 0.4, green: 0.6, blue: 1.0, alpha: 1).cgColor,
+            NSColor(red: 0.0, green: 0.3, blue: 0.9, alpha: 1).cgColor,
+            NSColor(red: 0.2, green: 0.5, blue: 1.0, alpha: 1).cgColor,
+        ],
+        "red": [
+            NSColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 1).cgColor,
+            NSColor(red: 1.0, green: 0.5, blue: 0.3, alpha: 1).cgColor,
+            NSColor(red: 1.0, green: 0.1, blue: 0.4, alpha: 1).cgColor,
+            NSColor(red: 0.8, green: 0.0, blue: 0.1, alpha: 1).cgColor,
+            NSColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 1).cgColor,
+        ],
+        "purple": [
+            NSColor(red: 0.7, green: 0.3, blue: 1.0, alpha: 1).cgColor,
+            NSColor(red: 1.0, green: 0.4, blue: 0.8, alpha: 1).cgColor,
+            NSColor(red: 0.5, green: 0.2, blue: 0.9, alpha: 1).cgColor,
+            NSColor(red: 0.8, green: 0.5, blue: 1.0, alpha: 1).cgColor,
+            NSColor(red: 0.7, green: 0.3, blue: 1.0, alpha: 1).cgColor,
+        ],
+        "green": [
+            NSColor(red: 0.1, green: 0.9, blue: 0.4, alpha: 1).cgColor,
+            NSColor(red: 0.3, green: 1.0, blue: 0.7, alpha: 1).cgColor,
+            NSColor(red: 0.0, green: 0.7, blue: 0.3, alpha: 1).cgColor,
+            NSColor(red: 0.2, green: 1.0, blue: 0.5, alpha: 1).cgColor,
+            NSColor(red: 0.1, green: 0.9, blue: 0.4, alpha: 1).cgColor,
+        ],
+    ]
+
+    /// rect is in AX coordinates (origin top-left, Y down).
     func show(around rect: CGRect) {
-        let screen = NSScreen.main ?? NSScreen.screens[0]
-        let flippedY = screen.frame.height - rect.maxY
-        let outerRect = rect.insetBy(dx: -borderWidth, dy: -borderWidth)
-        let frame = NSRect(x: outerRect.origin.x, y: flippedY - borderWidth,
-                           width: outerRect.width, height: outerRect.height)
+        let screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
+
+        // Convert AX coords → NSWindow frame (origin bottom-left, Y up)
+        let nsFrame = NSRect(
+            x: rect.origin.x - borderWidth,
+            y: screenH - (rect.origin.y + rect.height) - borderWidth,
+            width: rect.width + borderWidth * 2,
+            height: rect.height + borderWidth * 2)
 
         if window == nil {
-            let w = NSWindow(contentRect: frame, styleMask: .borderless,
+            let w = NSWindow(contentRect: nsFrame, styleMask: .borderless,
                              backing: .buffered, defer: false)
             w.isOpaque = false
             w.backgroundColor = .clear
@@ -454,15 +514,6 @@ class RGBBorder {
             gradientLayer.type = .conic
             gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
             gradientLayer.endPoint = CGPoint(x: 0.5, y: 0)
-            gradientLayer.colors = [
-                NSColor.red.cgColor,
-                NSColor.yellow.cgColor,
-                NSColor.green.cgColor,
-                NSColor.cyan.cgColor,
-                NSColor.blue.cgColor,
-                NSColor.magenta.cgColor,
-                NSColor.red.cgColor,
-            ]
             containerLayer.addSublayer(gradientLayer)
 
             maskLayer.fillRule = .evenOdd
@@ -479,9 +530,16 @@ class RGBBorder {
             window = w
         }
 
-        window?.setFrame(frame, display: false)
+        // Update gradient colors if changed
+        let color = settings.glowColor
+        if color != currentColor {
+            currentColor = color
+            gradientLayer.colors = Self.colorSets[color] ?? Self.colorSets["rainbow"]!
+        }
 
-        let viewBounds = NSRect(origin: .zero, size: frame.size)
+        window?.setFrame(nsFrame, display: false)
+
+        let viewBounds = NSRect(origin: .zero, size: nsFrame.size)
         containerLayer.frame = viewBounds
         window?.contentView?.subviews.first?.frame = viewBounds
 
@@ -525,6 +583,249 @@ private extension NSBezierPath {
             }
         }
         return path
+    }
+}
+
+// MARK: - Pong Mode
+
+class PongGame {
+    var active = false
+    var lastBounds = CGRect.zero
+
+    private var velocity = CGPoint.zero
+    private let baseSpeed: CGFloat = 420.0   // pixels per second
+    private let maxSpeed: CGFloat = 900.0
+
+    private var playerPaddle: NSWindow?
+    private var aiPaddle: NSWindow?
+    private var scoreOverlay: NSWindow?
+    private var scoreLabel: NSTextField?
+
+    private let paddleWidth: CGFloat = 8
+    private let paddleMargin: CGFloat = 20
+    private var paddleHeight: CGFloat = 150
+
+    private var playerScore = 0
+    private var aiScore = 0
+    private var aiY: CGFloat = 0
+    private let aiSpeed: CGFloat = 300.0     // pixels per second
+
+    private var pauseUntil: Date?
+    private var lastTick: Date?
+    private var ballPos = CGPoint.zero
+
+    func start(screen: CGRect) {
+        playerScore = 0
+        aiScore = 0
+        paddleHeight = screen.height * 0.15
+        aiY = screen.midY - paddleHeight / 2
+        lastTick = Date()
+
+        launchBall(direction: Bool.random() ? 1 : -1)
+
+        if Thread.isMainThread {
+            createOverlays(screen: screen)
+        } else {
+            DispatchQueue.main.sync { self.createOverlays(screen: screen) }
+        }
+
+        active = true
+        print("Pong started")
+    }
+
+    /// Returns the new PiP bounds after moving. Border should use this, not AX.
+    func tick(pip: PipWindowInfo, mousePos: CGPoint, screen: CGRect) -> CGRect {
+        let size = pip.bounds.size
+        let now = Date()
+        let dt = CGFloat(now.timeIntervalSince(lastTick ?? now))
+        lastTick = now
+
+        // On first tick, sync position from AX
+        if ballPos == .zero { ballPos = pip.bounds.origin }
+
+        // Pause after score
+        if let until = pauseUntil {
+            updatePaddlePositions(playerY: mousePos.y - paddleHeight / 2, screen: screen)
+            let bounds = CGRect(origin: ballPos, size: size)
+            lastBounds = bounds
+            if now < until { return bounds }
+            pauseUntil = nil
+        }
+
+        // Move ball (delta-time)
+        ballPos.x += velocity.x * dt
+        ballPos.y += velocity.y * dt
+
+        // Bounce top/bottom
+        if ballPos.y <= screen.minY {
+            ballPos.y = screen.minY
+            velocity.y = abs(velocity.y)
+        }
+        if ballPos.y + size.height >= screen.maxY {
+            ballPos.y = screen.maxY - size.height
+            velocity.y = -abs(velocity.y)
+        }
+
+        // Clamp speed
+        let spd = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+        if spd > maxSpeed {
+            let s = maxSpeed / spd
+            velocity.x *= s
+            velocity.y *= s
+        }
+
+        // Player paddle (left)
+        let pX = screen.minX + paddleMargin
+        let pY = max(screen.minY, min(screen.maxY - paddleHeight, mousePos.y - paddleHeight / 2))
+
+        // AI paddle (right)
+        let aiX = screen.maxX - paddleMargin - paddleWidth
+        let ballCY = ballPos.y + size.height / 2
+        let aiTarget = ballCY - paddleHeight / 2
+        let aiDiff = aiTarget - aiY
+        aiY += max(-aiSpeed * dt, min(aiSpeed * dt, aiDiff))
+        aiY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
+
+        // Player paddle collision
+        if ballPos.x <= pX + paddleWidth && ballPos.x >= pX - size.width / 2 && velocity.x < 0 {
+            if ballCY >= pY && ballCY <= pY + paddleHeight {
+                velocity.x = abs(velocity.x) * 1.05
+                let hit = (ballCY - pY) / paddleHeight - 0.5
+                velocity.y += hit * 200
+                ballPos.x = pX + paddleWidth
+            }
+        }
+
+        // AI paddle collision
+        if ballPos.x + size.width >= aiX && ballPos.x + size.width <= aiX + paddleWidth + size.width / 2 && velocity.x > 0 {
+            if ballCY >= aiY && ballCY <= aiY + paddleHeight {
+                velocity.x = -(abs(velocity.x) * 1.05)
+                let hit = (ballCY - aiY) / paddleHeight - 0.5
+                velocity.y += hit * 200
+                ballPos.x = aiX - size.width
+            }
+        }
+
+        // Score - ball past left
+        if ballPos.x + size.width < screen.minX - 30 {
+            aiScore += 1
+            ballPos = CGPoint(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2)
+            launchBall(direction: 1)
+            pauseUntil = Date().addingTimeInterval(0.8)
+        }
+
+        // Score - ball past right
+        if ballPos.x > screen.maxX + 30 {
+            playerScore += 1
+            ballPos = CGPoint(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2)
+            launchBall(direction: -1)
+            pauseUntil = Date().addingTimeInterval(0.8)
+        }
+
+        // Move PiP
+        var newPos = ballPos
+        if let val = AXValueCreate(.cgPoint, &newPos) {
+            AXUIElementSetAttributeValue(pip.axWindow, kAXPositionAttribute as CFString, val)
+        }
+
+        let bounds = CGRect(origin: ballPos, size: size)
+        lastBounds = bounds
+
+        updatePaddlePositions(playerY: pY, screen: screen)
+        updateScore()
+
+        return bounds
+    }
+
+    func stop() {
+        active = false
+        ballPos = .zero
+        lastTick = nil
+        let pw = playerPaddle, aw = aiPaddle, sw = scoreOverlay
+        let cleanup = {
+            pw?.orderOut(nil)
+            aw?.orderOut(nil)
+            sw?.orderOut(nil)
+        }
+        if Thread.isMainThread { cleanup() }
+        else { DispatchQueue.main.async { cleanup() } }
+        playerPaddle = nil
+        aiPaddle = nil
+        scoreOverlay = nil
+        scoreLabel = nil
+        print("Pong stopped")
+    }
+
+    private func launchBall(direction: CGFloat) {
+        let angle = CGFloat.random(in: -0.4...0.4)
+        velocity = CGPoint(x: baseSpeed * direction, y: baseSpeed * sin(angle))
+    }
+
+    private func createOverlays(screen: CGRect) {
+        let h = (NSScreen.main ?? NSScreen.screens[0]).frame.height
+
+        playerPaddle = makePaddleWindow(
+            nsFrame: NSRect(x: screen.minX + paddleMargin,
+                            y: h - screen.midY - paddleHeight / 2,
+                            width: paddleWidth, height: paddleHeight))
+
+        aiPaddle = makePaddleWindow(
+            nsFrame: NSRect(x: screen.maxX - paddleMargin - paddleWidth,
+                            y: h - screen.midY - paddleHeight / 2,
+                            width: paddleWidth, height: paddleHeight))
+
+        let sw = NSWindow(contentRect: NSRect(x: screen.midX - 80, y: h - 55, width: 160, height: 44),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        sw.isOpaque = false
+        sw.backgroundColor = NSColor.black.withAlphaComponent(0.6)
+        sw.level = .floating
+        sw.ignoresMouseEvents = true
+        sw.hasShadow = false
+
+        let label = NSTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 44))
+        label.isEditable = false
+        label.isBordered = false
+        label.backgroundColor = .clear
+        label.textColor = .white
+        label.font = NSFont.monospacedSystemFont(ofSize: 24, weight: .bold)
+        label.alignment = .center
+        label.stringValue = "0 : 0"
+        sw.contentView!.addSubview(label)
+        sw.orderFrontRegardless()
+
+        scoreOverlay = sw
+        scoreLabel = label
+    }
+
+    private func makePaddleWindow(nsFrame: NSRect) -> NSWindow {
+        let w = NSWindow(contentRect: nsFrame, styleMask: .borderless, backing: .buffered, defer: false)
+        w.isOpaque = false
+        w.backgroundColor = .clear
+        w.level = .floating
+        w.ignoresMouseEvents = true
+        w.hasShadow = false
+        w.contentView!.wantsLayer = true
+        w.contentView!.layer!.backgroundColor = NSColor.white.cgColor
+        w.contentView!.layer!.cornerRadius = paddleWidth / 2
+        w.orderFrontRegardless()
+        return w
+    }
+
+    private func updatePaddlePositions(playerY: CGFloat, screen: CGRect) {
+        let h = (NSScreen.main ?? NSScreen.screens[0]).frame.height
+
+        playerPaddle?.setFrame(
+            NSRect(x: screen.minX + paddleMargin, y: h - playerY - paddleHeight,
+                   width: paddleWidth, height: paddleHeight), display: false)
+
+        let aY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
+        aiPaddle?.setFrame(
+            NSRect(x: screen.maxX - paddleMargin - paddleWidth, y: h - aY - paddleHeight,
+                   width: paddleWidth, height: paddleHeight), display: false)
+    }
+
+    private func updateScore() {
+        scoreLabel?.stringValue = "\(playerScore) : \(aiScore)"
     }
 }
 
@@ -575,6 +876,7 @@ class XPipDaemon {
             interacting = false
             wasOnPip = false
             rgbBorder.hide()
+            if pong.active { pong.stop() }
             return
         }
 
@@ -584,6 +886,18 @@ class XPipDaemon {
             rgbBorder.pulse(audio.level)
         } else {
             rgbBorder.hide()
+        }
+
+        // Pong mode takes over from dodge
+        if pong.active {
+            let screen = getScreenFrame()
+            let newBounds = pong.tick(pip: pip, mousePos: mousePos, screen: screen)
+            // Update border using pong's exact position (no AX read lag)
+            if settings.glow {
+                rgbBorder.show(around: newBounds)
+                rgbBorder.pulse(audio.level)
+            }
+            return
         }
 
         // Skip dodge logic during animation or when disabled

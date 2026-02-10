@@ -38,6 +38,14 @@ restartDaemon().then(() => {
 
 document.getElementById("pipBtn").addEventListener("click", triggerPip);
 
+document.getElementById("pongBtn").addEventListener("click", async () => {
+  try {
+    const res = await fetch(`${API}/pong`, { method: "POST" });
+    const data = await res.json();
+    document.getElementById("pongBtn").textContent = data.pong ? "Stop Pong" : "Pong Mode";
+  } catch {}
+});
+
 els.status.addEventListener("click", async () => {
   if (els.status.classList.contains("offline")) {
     els.statusLabel.textContent = "Restarting...";
@@ -73,6 +81,8 @@ async function fetchStatus() {
     if (data.hotkeyCode !== undefined) {
       hotkeyBtn.textContent = formatHotkey(data.hotkeyCode, data.hotkeyFlags);
     }
+    document.getElementById("pongBtn").textContent = data.pong ? "Stop Pong" : "Pong Mode";
+    if (data.glowColor) setActiveColor(data.glowColor);
   } catch {
     els.statusLabel.textContent = "Offline — click to restart";
     els.status.className = "status offline";
@@ -96,6 +106,22 @@ els.toggle.addEventListener("change", () => {
 els.glow.addEventListener("change", () => {
   updateSettings({ glow: els.glow.checked });
 });
+
+const colorDots = document.querySelectorAll("#colorPicker .color-dot");
+
+colorDots.forEach((dot) => {
+  dot.addEventListener("click", () => {
+    colorDots.forEach((d) => d.classList.remove("active"));
+    dot.classList.add("active");
+    updateSettings({ glowColor: dot.dataset.color });
+  });
+});
+
+function setActiveColor(color) {
+  colorDots.forEach((d) => {
+    d.classList.toggle("active", d.dataset.color === color);
+  });
+}
 
 zoneBtns.forEach((btn) => {
   btn.addEventListener("click", () => {

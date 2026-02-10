@@ -124,6 +124,46 @@
       color: #a1a1aa;
     }
 
+    .color-row {
+      padding: 10px 0;
+      border-top: 1px solid #27272a;
+    }
+    .color-label {
+      font-size: 12px;
+      color: #a1a1aa;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .color-picker {
+      display: flex;
+      gap: 8px;
+    }
+    .color-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .color-dot:hover { transform: scale(1.15); }
+    .color-dot.active { border-color: #fafafa; }
+    .color-dot[data-color="rainbow"] {
+      background: conic-gradient(red, yellow, green, cyan, blue, magenta, red);
+    }
+    .color-dot[data-color="blue"] {
+      background: linear-gradient(135deg, #3388ff, #0af);
+    }
+    .color-dot[data-color="red"] {
+      background: linear-gradient(135deg, #ff3333, #ff7755);
+    }
+    .color-dot[data-color="purple"] {
+      background: linear-gradient(135deg, #b355ff, #ff66cc);
+    }
+    .color-dot[data-color="green"] {
+      background: linear-gradient(135deg, #1ae664, #55ffbb);
+    }
+
     .hotkey-row {
       display: flex;
       justify-content: space-between;
@@ -186,6 +226,7 @@
   <h1>xpip</h1>
 
   <button id="pipBtn" class="pip-btn">Toggle PiP</button>
+  <button id="pongBtn" class="pip-btn">Pong Mode</button>
 
   <div class="row">
     <span class="row-label">Dodge</span>
@@ -201,6 +242,17 @@
       <input type="checkbox" id="glowToggle" checked>
       <span class="slider"></span>
     </label>
+  </div>
+
+  <div class="color-row" id="colorRow">
+    <div class="color-label">Glow color</div>
+    <div class="color-picker" id="colorPicker">
+      <div class="color-dot active" data-color="rainbow"></div>
+      <div class="color-dot" data-color="blue"></div>
+      <div class="color-dot" data-color="red"></div>
+      <div class="color-dot" data-color="purple"></div>
+      <div class="color-dot" data-color="green"></div>
+    </div>
   </div>
 
   <div class="hotkey-row">

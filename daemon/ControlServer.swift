@@ -92,6 +92,12 @@ class ControlServer {
                 + "\"pong\":\(pong.active),"
                 + "\"flappy\":\(flappy.active),"
                 + "\"bounce\":\(bounce.active),"
+                + "\"invaders\":\(invaders.active),"
+                + "\"frogger\":\(frogger.active),"
+                + "\"runner\":\(runner.active),"
+                + "\"snake\":\(snake.active),"
+                + "\"breakout\":\(breakout.active),"
+                + "\"asteroids\":\(asteroids.active),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -137,6 +143,51 @@ class ControlServer {
             }
             sema.wait()
             return "{\"bounce\":\(bounce.active)}"
+        }
+
+        if firstLine.contains("POST /invaders") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                daemon.toggleGame(invaders)
+                sema.signal()
+            }
+            sema.wait()
+            return "{\"invaders\":\(invaders.active)}"
+        }
+
+        if firstLine.contains("POST /frogger") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(frogger); sema.signal() }
+            sema.wait()
+            return "{\"frogger\":\(frogger.active)}"
+        }
+
+        if firstLine.contains("POST /runner") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(runner); sema.signal() }
+            sema.wait()
+            return "{\"runner\":\(runner.active)}"
+        }
+
+        if firstLine.contains("POST /snake") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(snake); sema.signal() }
+            sema.wait()
+            return "{\"snake\":\(snake.active)}"
+        }
+
+        if firstLine.contains("POST /breakout") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(breakout); sema.signal() }
+            sema.wait()
+            return "{\"breakout\":\(breakout.active)}"
+        }
+
+        if firstLine.contains("POST /asteroids") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(asteroids); sema.signal() }
+            sema.wait()
+            return "{\"asteroids\":\(asteroids.active)}"
         }
 
         if firstLine.contains("POST /settings") {

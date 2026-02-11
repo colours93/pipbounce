@@ -100,63 +100,53 @@ els.pipBtn.addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  Games
+//  Games -- data-driven handlers for all mini-games
 // ---------------------------------------------------------------------------
 
-document.getElementById("pongBtn").addEventListener("click", async () => {
-  // Auto-enter PiP if not active
-  if (!pipIsActive) {
-    await enterPip();
-    await new Promise((r) => setTimeout(r, 800));
-  }
-  try {
-    const res = await fetch(`${API}/pong`, { method: "POST" });
-    const data = await res.json();
-    document.getElementById("pongBtn").textContent = data.pong
-      ? "Stop PiP Pong"
-      : "Pong in Picture";
-    if (data.pong) {
-      document.getElementById("flappyBtn").textContent = "FlaPiPy Bird";
-      document.getElementById("bounceBtn").textContent = "Bounce";
-    }
-  } catch {}
-});
+const games = [
+  { id: "pongBtn", key: "pong", label: "Pong in Picture", stopLabel: "Stop PiP Pong" },
+  { id: "flappyBtn", key: "flappy", label: "FlaPiPy Bird", stopLabel: "Stop FlaPiPy" },
+  { id: "bounceBtn", key: "bounce", label: "Bounce", stopLabel: "Stop Bounce" },
+  { id: "invadersBtn", key: "invaders", label: "Space Invaders", stopLabel: "Stop Invaders" },
+  { id: "froggerBtn", key: "frogger", label: "Frogger", stopLabel: "Stop Frogger" },
+  { id: "runnerBtn", key: "runner", label: "Runner", stopLabel: "Stop Runner" },
+  { id: "snakeBtn", key: "snake", label: "Snake", stopLabel: "Stop Snake" },
+  { id: "breakoutBtn", key: "breakout", label: "Breakout", stopLabel: "Stop Breakout" },
+  { id: "asteroidsBtn", key: "asteroids", label: "Asteroids", stopLabel: "Stop Asteroids" },
+];
 
-document.getElementById("flappyBtn").addEventListener("click", async () => {
-  if (!pipIsActive) {
-    await enterPip();
-    await new Promise((r) => setTimeout(r, 800));
-  }
-  try {
-    const res = await fetch(`${API}/flappy`, { method: "POST" });
-    const data = await res.json();
-    document.getElementById("flappyBtn").textContent = data.flappy
-      ? "Stop FlaPiPy"
-      : "FlaPiPy Bird";
-    if (data.flappy) {
-      document.getElementById("pongBtn").textContent = "Pong in Picture";
-      document.getElementById("bounceBtn").textContent = "Bounce";
+function resetGameButtons(exceptKey) {
+  for (const g of games) {
+    if (g.key !== exceptKey) {
+      document.getElementById(g.id).textContent = g.label;
     }
-  } catch {}
-});
+  }
+}
 
-document.getElementById("bounceBtn").addEventListener("click", async () => {
-  if (!pipIsActive) {
-    await enterPip();
-    await new Promise((r) => setTimeout(r, 800));
-  }
-  try {
-    const res = await fetch(`${API}/bounce`, { method: "POST" });
-    const data = await res.json();
-    document.getElementById("bounceBtn").textContent = data.bounce
-      ? "Stop Bounce"
-      : "Bounce";
-    if (data.bounce) {
-      document.getElementById("pongBtn").textContent = "Pong in Picture";
-      document.getElementById("flappyBtn").textContent = "FlaPiPy Bird";
+function syncGameButtons(data) {
+  for (const g of games) {
+    if (data[g.key] !== undefined) {
+      document.getElementById(g.id).textContent = data[g.key] ? g.stopLabel : g.label;
     }
-  } catch {}
-});
+  }
+}
+
+for (const game of games) {
+  document.getElementById(game.id).addEventListener("click", async () => {
+    if (!pipIsActive) {
+      await enterPip();
+      await new Promise((r) => setTimeout(r, 800));
+    }
+    try {
+      const res = await fetch(`${API}/${game.key}`, { method: "POST" });
+      const data = await res.json();
+      document.getElementById(game.id).textContent = data[game.key]
+        ? game.stopLabel
+        : game.label;
+      if (data[game.key]) resetGameButtons(game.key);
+    } catch {}
+  });
+}
 
 // ---------------------------------------------------------------------------
 //  Status -- click to restart only when offline
@@ -324,15 +314,7 @@ async function fetchStatus() {
     if (data.hotkeyCode !== undefined) {
       hotkeyBtn.textContent = formatHotkey(data.hotkeyCode, data.hotkeyFlags);
     }
-    document.getElementById("pongBtn").textContent = data.pong
-      ? "Stop PiP Pong"
-      : "Pong in Picture";
-    document.getElementById("flappyBtn").textContent = data.flappy
-      ? "Stop FlaPiPy"
-      : "FlaPiPy Bird";
-    document.getElementById("bounceBtn").textContent = data.bounce
-      ? "Stop Bounce"
-      : "Bounce";
+    syncGameButtons(data);
     if (data.glowColor) setActiveColor(data.glowColor);
 
     return data;

@@ -93,9 +93,21 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
         && !popupSubroles.contains(subrole)
         && !invalidRoles.contains(role)
 
+    // Reject windows with a minimize or close button — real PiP windows have neither.
+    // This filters out extension popups, devtools panels, and other Chrome UI.
+    var minimizeRef: CFTypeRef?
+    let hasMinimize = AXUIElementCopyAttributeValue(window, kAXMinimizeButtonAttribute as CFString, &minimizeRef) == .success
+        && minimizeRef != nil
+
+    var closeRef: CFTypeRef?
+    let hasClose = AXUIElementCopyAttributeValue(window, kAXCloseButtonAttribute as CFString, &closeRef) == .success
+        && closeRef != nil
+
     let isDocPip = (title == "" || title == "about:blank")
         && matchesFloat
         && hasValidAXAttributes
+        && !hasMinimize
+        && !hasClose
         && size.width >= 200 && size.width <= 800
         && size.height >= 100 && size.height <= 600
         && (size.width / size.height) > 1.4

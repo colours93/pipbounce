@@ -6,7 +6,7 @@ class Settings {
     var margin: CGFloat = 20
     var cornerSize: CGFloat = 100
     var glow = true
-    var glowColor = "rainbow"        // rainbow, blue, red, purple, green
+    var glowColor = "purple"         // purple, blue, red, green, rainbow
     var hotkeyCode: UInt16 = 2       // "d" key
     var hotkeyFlags: UInt32 = 0x108  // cmd+shift
 }

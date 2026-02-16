@@ -98,6 +98,17 @@ class BounceGame: MiniGame {
     private func gameTick() {
         guard active, let axWindow = cachedAXWindow else { return }
 
+        // Re-read actual PiP size each tick so resizing is handled correctly
+        var sizeRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success {
+            var freshSize = CGSize.zero
+            AXValueGetValue(sizeRef as! AXValue, .cgSize, &freshSize)
+            if freshSize.width > 0 && freshSize.height > 0 {
+                cachedPipSize = freshSize
+                borderRef?.rotationPadding = max(freshSize.width, freshSize.height) * 0.3
+            }
+        }
+
         let screen = getScreenFrame()
         let size = cachedPipSize
         let now = mach_absolute_time()
@@ -169,6 +180,10 @@ class BounceGame: MiniGame {
                 position.y = screen.maxY - size.height
                 velocity.y = -abs(velocity.y) * elasticity
             }
+
+            // Hard clamp — ensures PiP can never escape screen regardless of size changes
+            position.x = max(screen.minX, min(position.x, screen.maxX - size.width))
+            position.y = max(screen.minY, min(position.y, screen.maxY - size.height))
 
             // Rest detection
             let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)

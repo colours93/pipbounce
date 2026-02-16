@@ -100,7 +100,7 @@ swiftc "${SWIFT_FILES[@]}" \
     -O
 
 chmod +x "$BINARY"
-SIGN_ID=$(security find-identity -v -p codesigning | grep "pipbounce Dev" | head -1 | awk -F'"' '{print $2}')
+SIGN_ID=$(security find-identity -v -p codesigning | grep "pipbounce Dev" | head -1 | awk -F'"' '{print $2}' || true)
 if [ -n "$SIGN_ID" ]; then
     codesign --force --sign "$SIGN_ID" "$APP_BUNDLE"
     log_ok "Signed with stable identity: $SIGN_ID"

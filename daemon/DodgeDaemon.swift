@@ -51,7 +51,7 @@ class PipBounceDaemon {
               AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
         else { return nil }
 
-        return PipWindowInfo(axWindow: element, bounds: CGRect(origin: pos, size: size))
+        return PipWindowInfo(bounds: CGRect(origin: pos, size: size), axWindow: element)
     }
 
     private func tick() {

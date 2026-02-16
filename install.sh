@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-#  xpip Installer
+#  pipbounce Installer
 #  Compiles the Swift daemon, generates extension icons, and prints
 #  post-install instructions.
 # ---------------------------------------------------------------------------
@@ -10,9 +10,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DAEMON_DIR="$SCRIPT_DIR/daemon"
 EXTENSION_DIR="$SCRIPT_DIR/extension"
-INSTALL_DIR="$HOME/.xpip"
-APP_BUNDLE="$INSTALL_DIR/xpip.app"
-BINARY="$APP_BUNDLE/Contents/MacOS/xpip"
+INSTALL_DIR="$HOME/.pipbounce"
+APP_BUNDLE="$INSTALL_DIR/pipbounce.app"
+BINARY="$APP_BUNDLE/Contents/MacOS/pipbounce"
 PORT=51789
 
 # ---------------------------------------------------------------------------
@@ -46,23 +46,23 @@ fi
 log "OK" "All prerequisites met."
 
 # ---------------------------------------------------------------------------
-#  Step 1 -- Stop any running xpip process
+#  Step 1 -- Stop any running pipbounce process
 # ---------------------------------------------------------------------------
 
 section "Step 1/4: Stop existing daemon"
 
-PLIST_LABEL="com.xpip.daemon"
+PLIST_LABEL="com.pipbounce.daemon"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 
 if launchctl list "$PLIST_LABEL" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
     sleep 0.5
     log "1/4" "Stopped existing launchd agent."
-elif pgrep -x xpip >/dev/null 2>&1; then
-    pkill -x xpip && sleep 0.5
-    log "1/4" "Killed running xpip process."
+elif pgrep -x pipbounce >/dev/null 2>&1; then
+    pkill -x pipbounce && sleep 0.5
+    log "1/4" "Killed running pipbounce process."
 else
-    log "1/4" "No running xpip process found. Continuing."
+    log "1/4" "No running pipbounce process found. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
@@ -79,11 +79,11 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'INFOPLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.xpip.daemon</string>
+    <string>com.pipbounce.daemon</string>
     <key>CFBundleName</key>
-    <string>xpip</string>
+    <string>pipbounce</string>
     <key>CFBundleExecutable</key>
-    <string>xpip</string>
+    <string>pipbounce</string>
     <key>LSUIElement</key>
     <true/>
 </dict>
@@ -100,7 +100,7 @@ swiftc "${SWIFT_FILES[@]}" \
     -O
 
 chmod +x "$BINARY"
-SIGN_ID=$(security find-identity -v -p codesigning | grep "xpip Dev" | head -1 | awk -F'"' '{print $2}')
+SIGN_ID=$(security find-identity -v -p codesigning | grep "pipbounce Dev" | head -1 | awk -F'"' '{print $2}')
 if [ -n "$SIGN_ID" ]; then
     codesign --force --sign "$SIGN_ID" "$APP_BUNDLE"
     log_ok "Signed with stable identity: $SIGN_ID"
@@ -185,9 +185,9 @@ cat > "$PLIST_PATH" << PLISTEOF
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$INSTALL_DIR/xpip.log</string>
+    <string>$INSTALL_DIR/pipbounce.log</string>
     <key>StandardErrorPath</key>
-    <string>$INSTALL_DIR/xpip.log</string>
+    <string>$INSTALL_DIR/pipbounce.log</string>
 </dict>
 </plist>
 PLISTEOF
@@ -226,7 +226,7 @@ printf "     c. Click \"Load unpacked\" and select:\n"
 printf "        %s\n" "$EXTENSION_DIR"
 printf "\n"
 printf "  The daemon starts automatically on login and restarts each\n"
-printf "  time you open the extension popup. Logs: %s/xpip.log\n" "$INSTALL_DIR"
+printf "  time you open the extension popup. Logs: %s/pipbounce.log\n" "$INSTALL_DIR"
 printf "\n"
-printf "  To stop:  launchctl bootout gui/\$(id -u)/com.xpip.daemon\n"
+printf "  To stop:  launchctl bootout gui/\$(id -u)/com.pipbounce.daemon\n"
 printf "\n"

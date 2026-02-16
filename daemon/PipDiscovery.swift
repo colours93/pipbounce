@@ -75,11 +75,30 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
         abs(r.origin.x - pos.x) < 3 && abs(r.origin.y - pos.y) < 3
             && abs(r.width - size.width) < 3 && abs(r.height - size.height) < 3
     }
+
+    // Additional AX role/subrole filtering for Document PiP to reject popups,
+    // autofill dropdowns, dialogs, etc.
+    var roleRef: CFTypeRef?
+    _ = AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &roleRef)
+    let role = (roleRef as? String) ?? ""
+
+    var subroleRef: CFTypeRef?
+    _ = AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subroleRef)
+    let subrole = (subroleRef as? String) ?? ""
+
+    let popupSubroles: Set<String> = ["AXDialog", "AXSystemDialog", "AXFloatingWindow"]
+    let invalidRoles: Set<String> = ["AXPopover", "AXSheet"]
+
+    let hasValidAXAttributes = (role == "" || role == "AXWindow")
+        && !popupSubroles.contains(subrole)
+        && !invalidRoles.contains(role)
+
     let isDocPip = (title == "" || title == "about:blank")
         && matchesFloat
+        && hasValidAXAttributes
         && size.width >= 200 && size.width <= 800
         && size.height >= 100 && size.height <= 600
-        && (size.width / size.height) > 1.2
+        && (size.width / size.height) > 1.4
 
     guard isPip || isDocPip else { return nil }
 

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "xpip",
+  "name": "pipbounce",
   "description": "Picture-in-Picture that dodges your mouse cursor system-wide",
   "version": "1.4",
   "permissions": ["scripting", "activeTab", "tabs"],
@@ -11,7 +11,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "xpip",
+    "default_title": "pipbounce",
     "default_popup": "popup.html"
   },
   "icons": {

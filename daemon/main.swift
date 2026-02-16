@@ -2,7 +2,7 @@ import Cocoa
 
 // MARK: - PID Lock
 
-let pidPath = NSString("~/.xpip/xpip.pid").expandingTildeInPath
+let pidPath = NSString("~/.pipbounce/pipbounce.pid").expandingTildeInPath
 
 func killExisting() {
     guard let pidStr = try? String(contentsOfFile: pidPath, encoding: .utf8),
@@ -34,7 +34,7 @@ writePid()
 let app = NSApplication.shared
 let server = ControlServer()
 server.start()
-let daemon = XPipDaemon()
+let daemon = PipBounceDaemon()
 daemon.start()
 
 signal(SIGINT) { _ in

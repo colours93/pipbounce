@@ -1,10 +1,13 @@
 import Cocoa
 
 func getScreenFrame() -> CGRect {
-    if let main = NSScreen.main {
-        return CGRect(x: 0, y: 0, width: main.frame.width, height: main.frame.height)
+    guard let main = NSScreen.main else {
+        return CGRect(x: 0, y: 0, width: 1920, height: 1080)
     }
-    return CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    let full = main.frame
+    let vis = main.visibleFrame
+    let y = full.height - vis.maxY
+    return CGRect(x: vis.origin.x, y: y, width: vis.width, height: vis.height)
 }
 
 /// Returns the screen corner farthest from the mouse, offset by margin and window size.

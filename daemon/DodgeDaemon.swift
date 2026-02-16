@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-class XPipDaemon {
+class PipBounceDaemon {
     private var lastDodgeTime = Date.distantPast
     private var interacting = false
     private var wasOnPip = false
@@ -16,6 +16,9 @@ class XPipDaemon {
     private var animSize = CGSize.zero
     private var animCurrentPos = CGPoint.zero
     private var animTimer: DispatchSourceTimer?
+    private var cachedPipWindow: AXUIElement?
+    private var lastDiscoveryTime = Date.distantPast
+    private let discoveryInterval: TimeInterval = 0.5
     private static var timebaseInfo: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -28,11 +31,27 @@ class XPipDaemon {
         }
 
         installHotkey()
-        print("xpip daemon started")
+        print("pipbounce daemon started")
 
         Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             self?.tick()
         }
+    }
+
+    private func quickCheck(_ element: AXUIElement) -> PipWindowInfo? {
+        var posVal: AnyObject?
+        var sizeVal: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posVal) == .success,
+              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeVal) == .success
+        else { return nil }
+
+        var pos = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(posVal as! AXValue, .cgPoint, &pos),
+              AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
+        else { return nil }
+
+        return PipWindowInfo(axWindow: element, bounds: CGRect(origin: pos, size: size))
     }
 
     private func tick() {
@@ -45,9 +64,24 @@ class XPipDaemon {
         guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
 
-        guard let pip = findPipWindow() else {
+        let pip: PipWindowInfo?
+        if let cached = cachedPipWindow, let info = quickCheck(cached) {
+            pip = info
+        } else {
+            let now = Date()
+            guard now.timeIntervalSince(lastDiscoveryTime) >= discoveryInterval else {
+                rgbBorder.hide()
+                return
+            }
+            lastDiscoveryTime = now
+            pip = findPipWindow()
+            cachedPipWindow = pip?.axWindow
+        }
+
+        guard let pip else {
             interacting = false
             wasOnPip = false
+            cachedPipWindow = nil
             rgbBorder.hide()
             return
         }
@@ -131,7 +165,7 @@ class XPipDaemon {
 
         animTimer?.cancel()
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        t.schedule(deadline: .now(), repeating: .milliseconds(2), leeway: .microseconds(100))
+        t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .milliseconds(2))
         t.setEventHandler { [weak self] in self?.stepAnimation() }
         animTimer = t
         t.resume()

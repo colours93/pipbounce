@@ -30,7 +30,7 @@ section()  { printf "\n--- %s %s\n" "$1" "$(printf '%*s' $((60 - ${#1})) '' | tr
 
 section "Pre-flight"
 
-SWIFT_FILES=("$DAEMON_DIR"/*.swift)
+SWIFT_FILES=("$DAEMON_DIR"/*.swift "$DAEMON_DIR"/Games/*.swift)
 if [ ${#SWIFT_FILES[@]} -eq 0 ]; then
     bail "No Swift source files found in $DAEMON_DIR"
 fi
@@ -192,6 +192,14 @@ cat > "$PLIST_PATH" << PLISTEOF
 </plist>
 PLISTEOF
 
+# Reset Accessibility approval so macOS re-prompts for the new binary.
+# tccutil uses the bundle identifier to clear TCC entries.
+if tccutil reset Accessibility com.pipbounce.daemon 2>/dev/null; then
+    log_ok "Reset Accessibility approval for new binary."
+else
+    log_ok "Could not reset TCC (may need manual removal)."
+fi
+
 launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
 
@@ -203,6 +211,9 @@ if launchctl list "$PLIST_LABEL" >/dev/null 2>&1; then
 else
     log "4/4" "Launchd agent installed. Start manually: launchctl load $PLIST_PATH"
 fi
+
+# Open System Settings to Accessibility pane so user can grant permission
+open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 #  Done -- print setup instructions

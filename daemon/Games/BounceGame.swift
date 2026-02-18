@@ -80,22 +80,19 @@ class BounceGame: GameBase {
     private var paddleEdgeT: CGFloat = 0.5
     private let paddleLength: CGFloat = 80
     private let paddleThickness: CGFloat = 6
-    private let paddleSpeed: CGFloat = 0.4
+    private let paddleBaseSpeed: CGFloat = 0.15   // starting speed (slow, easy to catch)
+    private let paddleMaxSpeed: CGFloat = 0.55     // cap at high scores
     private var paddleHitCooldown: UInt64 = 0
+
+    // AI behavior
+    private var reactionTarget: CGFloat = 0.125    // where the paddle "thinks" it should go (updated with delay)
+    private var reactionTimer: CGFloat = 0          // countdown to next target update
+    private var dodgeOffset: CGFloat = 0            // random imprecision in dodge target
+    private var panicFreezeTimer: CGFloat = 0       // brief hesitation when PiP gets close
 
     // Score (paddle mode only)
     private var triggeredMilestones: Set<Int> = []
 
-    private static var timebaseInfoData: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
-
-    private func secondsToMach(_ sec: Double) -> UInt64 {
-        let info = Self.timebaseInfoData
-        return UInt64(sec * 1_000_000_000) * UInt64(info.denom) / UInt64(info.numer)
-    }
 
     // MARK: - GameBase Hooks
 
@@ -111,6 +108,11 @@ class BounceGame: GameBase {
         paddleEdge = 2
         paddleEdgeT = 0.5
         paddleHitCooldown = 0
+        perimeterT = 0.125
+        reactionTarget = 0.125
+        reactionTimer = 0
+        dodgeOffset = 0
+        panicFreezeTimer = 0
 
         borderRef?.rotationPadding = max(pip.bounds.size.width, pip.bounds.size.height) * 0.3
 
@@ -210,7 +212,7 @@ class BounceGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         refreshPipSize()
         borderRef?.rotationPadding = max(cachedPipSize.width, cachedPipSize.height) * 0.3
@@ -331,38 +333,126 @@ class BounceGame: GameBase {
 
     // MARK: - Paddle Logic
 
+    /// Perimeter position: 0..1 maps continuously around the screen edges.
+    /// 0.00–0.25 = bottom (left to right)
+    /// 0.25–0.50 = right  (bottom to top)
+    /// 0.50–0.75 = top    (right to left)
+    /// 0.75–1.00 = left   (top to bottom)
+    private var perimeterT: CGFloat = 0.125  // start at bottom center
+
+    private func perimeterToEdge(_ t: CGFloat) -> (edge: Int, edgeT: CGFloat) {
+        let t = t - floor(t)  // normalize to 0..1
+        if t < 0.25      { return (2, t / 0.25) }           // bottom
+        else if t < 0.50  { return (1, (t - 0.25) / 0.25) } // right
+        else if t < 0.75  { return (0, 1.0 - (t - 0.50) / 0.25) } // top (reversed so it goes right-to-left)
+        else              { return (3, 1.0 - (t - 0.75) / 0.25) } // left (reversed so it goes top-to-bottom)
+    }
+
+    private func pointToPerimeterT(point: CGPoint, screen: CGRect) -> CGFloat {
+        // Find closest perimeter position for a point (used to compute dodge target)
+        let w = screen.width
+        let h = screen.height
+        let px = (point.x - screen.minX) / w
+        let py = (point.y - screen.minY) / h
+
+        // Distance to each edge
+        let dBottom = point.y - screen.minY  // edge 2 (y = maxY in our coords, but pip coords have minY at top... wait)
+        // Actually: in our coordinate system, position.y increases downward, screen.minY is top, screen.maxY is bottom
+        // Bottom edge = screen.maxY, Top edge = screen.minY
+        let dTop = py          // fraction from top
+        let dBot = 1.0 - py    // fraction from bottom
+        let dLeft = px
+        let dRight = 1.0 - px
+
+        let minD = min(dTop, dBot, dLeft, dRight)
+        if minD == dBot  { return px * 0.25 }                    // bottom edge
+        if minD == dRight { return 0.25 + py * 0.25 }             // right edge
+        if minD == dTop  { return 0.50 + (1.0 - px) * 0.25 }     // top edge
+        return 0.75 + (1.0 - py) * 0.25                          // left edge
+    }
+
+    private func currentPaddleSpeed() -> CGFloat {
+        // Ramps from base to max over score 0..50
+        let t = min(CGFloat(score) / 50.0, 1.0)
+        return paddleBaseSpeed + (paddleMaxSpeed - paddleBaseSpeed) * t
+    }
+
+    private func currentReactionInterval() -> CGFloat {
+        // How often the paddle re-evaluates where the PiP is
+        // Starts slow (big delay), gets snappier with score
+        let t = min(CGFloat(score) / 40.0, 1.0)
+        return 0.35 - 0.25 * t  // 0.35s -> 0.10s
+    }
+
+    private func currentDodgeInaccuracy() -> CGFloat {
+        // How far off the paddle's dodge target is from perfect opposite
+        // Starts very inaccurate, tightens with score
+        let t = min(CGFloat(score) / 60.0, 1.0)
+        return 0.15 - 0.10 * t  // ±0.15 -> ±0.05 perimeter units
+    }
+
     private func tickPaddle(screen: CGRect, size: CGSize, now: UInt64, dt: CGFloat) {
         let pipCenter = CGPoint(x: position.x + size.width / 2, y: position.y + size.height / 2)
+        let pipPerimT = pointToPerimeterT(point: pipCenter, screen: screen)
 
-        // Determine which edge is farthest from PiP
-        let distTop = position.y - screen.minY
-        let distBottom = screen.maxY - (position.y + size.height)
-        let distLeft = position.x - screen.minX
-        let distRight = screen.maxX - (position.x + size.width)
-        let maxDist = max(distTop, distBottom, distLeft, distRight)
+        // --- Reaction delay: only update dodge target periodically ---
+        reactionTimer -= dt
+        if reactionTimer <= 0 {
+            reactionTimer = currentReactionInterval()
 
-        var targetEdge = paddleEdge
-        if maxDist == distBottom { targetEdge = 2 }
-        else if maxDist == distTop { targetEdge = 0 }
-        else if maxDist == distRight { targetEdge = 1 }
-        else { targetEdge = 3 }
+            // Target: opposite side, but with inaccuracy
+            var idealTarget = pipPerimT + 0.5
+            if idealTarget >= 1.0 { idealTarget -= 1.0 }
 
-        if targetEdge != paddleEdge { paddleEdge = targetEdge }
+            // Add random offset (the paddle isn't a perfect dodger)
+            let inaccuracy = currentDodgeInaccuracy()
+            dodgeOffset = CGFloat.random(in: -inaccuracy...inaccuracy)
 
-        // Move along edge
-        let edgeTargetT: CGFloat
-        switch paddleEdge {
-        case 0, 2:
-            let pipT = (pipCenter.x - screen.minX) / screen.width
-            edgeTargetT = pipT < 0.5 ? min(pipT + 0.4, 0.95) : max(pipT - 0.4, 0.05)
-        default:
-            let pipT = (pipCenter.y - screen.minY) / screen.height
-            edgeTargetT = pipT < 0.5 ? min(pipT + 0.4, 0.95) : max(pipT - 0.4, 0.05)
+            reactionTarget = idealTarget + dodgeOffset
+            if reactionTarget < 0 { reactionTarget += 1.0 }
+            if reactionTarget >= 1.0 { reactionTarget -= 1.0 }
         }
 
-        let dir: CGFloat = edgeTargetT > paddleEdgeT ? 1 : -1
-        paddleEdgeT += dir * paddleSpeed * dt
-        paddleEdgeT = max(0.02, min(0.98, paddleEdgeT))
+        // --- Panic: when PiP is heading straight at the paddle, brief freeze ---
+        let dx = pipCenter.x - (screen.minX + perimeterT * screen.width)
+        let dy = pipCenter.y - (screen.minY + perimeterT * screen.height)
+        let distToPaddle = sqrt(dx * dx + dy * dy)
+        let screenDiag = sqrt(screen.width * screen.width + screen.height * screen.height)
+
+        if panicFreezeTimer > 0 {
+            panicFreezeTimer -= dt
+        } else if distToPaddle < screenDiag * 0.15 {
+            // PiP got close — paddle panics and freezes briefly
+            // Less panic at higher scores (paddle gets braver)
+            let panicChance = max(0.1, 0.5 - CGFloat(score) * 0.008)
+            if CGFloat.random(in: 0...1) < panicChance {
+                panicFreezeTimer = CGFloat.random(in: 0.08...0.25)
+            }
+        }
+
+        // --- Move along perimeter toward reaction target ---
+        let effectiveSpeed: CGFloat
+        if panicFreezeTimer > 0 {
+            effectiveSpeed = currentPaddleSpeed() * 0.15  // nearly frozen during panic
+        } else {
+            effectiveSpeed = currentPaddleSpeed()
+        }
+
+        var diff = reactionTarget - perimeterT
+        if diff > 0.5 { diff -= 1.0 }
+        if diff < -0.5 { diff += 1.0 }
+
+        let moveAmount = effectiveSpeed * dt
+        if abs(diff) < moveAmount {
+            perimeterT = reactionTarget
+        } else {
+            perimeterT += (diff > 0 ? 1 : -1) * moveAmount
+        }
+        perimeterT = perimeterT - floor(perimeterT)
+
+        let (edge, edgeT) = perimeterToEdge(perimeterT)
+        paddleEdge = edge
+        paddleEdgeT = max(0.02, min(0.98, edgeT))
 
         // Compute paddle rect
         let paddleRect: CGRect
@@ -387,7 +477,6 @@ class BounceGame: GameBase {
                                  y: screenH - paddleRect.origin.y - paddleRect.height,
                                  width: paddleRect.width, height: paddleRect.height)
             pw.setFrame(nsFrame, display: true)
-            // Resize pixel art layer to match paddle
             if let pLayer = paddleLayer {
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
@@ -396,14 +485,18 @@ class BounceGame: GameBase {
             }
         }
 
-        // Collision
+        // --- Collision ---
         let pipRect = CGRect(origin: position, size: size)
         if pipRect.intersects(paddleRect) && now > paddleHitCooldown {
             score += 1
             scoreLabel?.stringValue = "\(score)"
             paddleHitCooldown = now + secondsToMach(0.5)
-            paddleEdge = (paddleEdge + 2) % 4
-            paddleEdgeT = CGFloat.random(in: 0.2...0.8)
+
+            // On hit: scramble the paddle's position a bit (it got caught, needs to recover)
+            perimeterT += CGFloat.random(in: -0.15...0.15)
+            perimeterT = perimeterT - floor(perimeterT)
+            // Force a delayed reaction to the new state
+            reactionTimer = currentReactionInterval() * 1.5
 
             // Hit flash on paddle
             if let pLayer = paddleLayer {

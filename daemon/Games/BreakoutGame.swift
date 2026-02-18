@@ -48,7 +48,6 @@ class BreakoutGame: GameBase {
     // Lives, level
     private var lives = 3
     private var level = 0
-    private var gameWon = false
     private var extraLifeGiven500 = false
     private var extraLifeGiven1500 = false
 
@@ -202,7 +201,6 @@ class BreakoutGame: GameBase {
         timerIntervalMs = 8
         lives = 3
         level = 0
-        gameWon = false
         launched = false
         wasMouseDown = false
         bricks = []
@@ -319,7 +317,7 @@ class BreakoutGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         let screen = getScreenFrame()
         let dt = deltaTime()
@@ -329,13 +327,7 @@ class BreakoutGame: GameBase {
         let size = cachedPipSize
 
         // End screen timeout
-        if gameOver || gameWon {
-            if checkGameOverTimeout() { return }
-            // gameWon uses same timeout logic
-            let now = mach_absolute_time()
-            if machToSeconds(now - gameEndMach) > gameOverDelay { stop() }
-            return
-        }
+        if checkGameOverTimeout() { return }
 
         // --- Input ---
         guard let mousePos = mousePosition() else { return }

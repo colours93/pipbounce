@@ -168,7 +168,7 @@ class RunnerGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         let screen = getScreenFrame()
         let now = mach_absolute_time()

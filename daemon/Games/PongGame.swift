@@ -33,7 +33,6 @@ class PongGame: GameBase {
 
     // Match format: first to 7, win by 2
     private let winScore = 7
-    private var matchCount = 0
     private var matchOverUntil: UInt64 = 0
     private var matchOverMessage: String?
 
@@ -50,19 +49,7 @@ class PongGame: GameBase {
 
     // Screen shake
     private var shakeFramesRemaining = 0
-    private var shakeOffsets: [CGPoint] = []
 
-    private func secondsToMach(_ sec: Double) -> UInt64 {
-        let info = type(of: self).timebaseInfoData
-        return UInt64(sec * 1_000_000_000) * UInt64(info.denom) / UInt64(info.numer)
-    }
-
-    // We need access to the timebase info for secondsToMach
-    private static var timebaseInfoData: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
 
     override func onStart(screen: CGRect, pip: PipWindowInfo) {
         timerIntervalMs = 8
@@ -117,7 +104,7 @@ class PongGame: GameBase {
     }
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         refreshPipSize()
 
@@ -310,7 +297,6 @@ class PongGame: GameBase {
         let maxS = max(playerScore, aiScore)
         let minS = min(playerScore, aiScore)
         if maxS >= winScore && maxS - minS >= 2 {
-            matchCount += 1
             let msg = playerScore > aiScore ? "YOU WIN" : "AI WINS"
             matchOverMessage = msg
             scoreChanged = true

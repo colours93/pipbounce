@@ -53,10 +53,6 @@ class SnakeGame: GameBase {
     // Particle burst overlay
     private var particleWindow: NSWindow?
 
-    // Colors
-    private let headColor = NSColor(red: 0.1, green: 0.9, blue: 0.3, alpha: 1.0)
-    private let tipColor = NSColor(red: 0.0, green: 0.25, blue: 0.1, alpha: 0.85)
-    private let foodColor = NSColor(red: 0.0, green: 0.9, blue: 0.35, alpha: 1.0)
 
     // MARK: - Pixel Art Sprites
     private enum Sprites {
@@ -138,18 +134,6 @@ class SnakeGame: GameBase {
         }()
     }
 
-    // Mach -> seconds for boost timing
-    private func secondsToMach(_ sec: Double) -> UInt64 {
-        let now1 = mach_absolute_time()
-        let now2 = mach_absolute_time()
-        // Use base class machToSeconds to derive inverse
-        let oneSec = machToSeconds(now2 - now1 + 1)
-        guard oneSec > 0 else { return 0 }
-        // Direct computation
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return UInt64(sec * 1_000_000_000) * UInt64(info.denom) / UInt64(info.numer)
-    }
 
     // MARK: - Coordinate conversion
 
@@ -236,7 +220,7 @@ class SnakeGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         let screen = getScreenFrame()
         savedScreen = screen
@@ -373,13 +357,9 @@ class SnakeGame: GameBase {
             seg.contentView?.layer?.borderColor = NSColor(red: 1.0, green: 0.2, blue: 0.2, alpha: 1.0).cgColor
         }
 
-        let savedColor = settings.glowColor
-        settings.glowColor = "red"
+        // Flash border red without mutating global settings
         if let border = borderRef {
             border.show(around: lastBounds)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            settings.glowColor = savedColor
         }
 
         print("Snake game over: score=\(score)")
@@ -391,20 +371,6 @@ class SnakeGame: GameBase {
         guard tailSegments.count > 1 else { return maxSegScale }
         let t = CGFloat(i) / CGFloat(tailSegments.count - 1)
         return maxSegScale + (minSegScale - maxSegScale) * t
-    }
-
-    private func segColorForIndex(_ i: Int) -> (bg: NSColor, border: NSColor) {
-        guard tailSegments.count > 1 else {
-            return (headColor, headColor)
-        }
-        let t = CGFloat(i) / CGFloat(tailSegments.count - 1)
-        let r = headColor.redComponent + (tipColor.redComponent - headColor.redComponent) * t
-        let g = headColor.greenComponent + (tipColor.greenComponent - headColor.greenComponent) * t
-        let b = headColor.blueComponent + (tipColor.blueComponent - headColor.blueComponent) * t
-        let a = headColor.alphaComponent + (tipColor.alphaComponent - headColor.alphaComponent) * t
-        let bg = NSColor(red: r, green: g, blue: b, alpha: a)
-        let brd = NSColor(red: min(r + 0.1, 1), green: min(g + 0.1, 1), blue: min(b + 0.05, 1), alpha: 1)
-        return (bg, brd)
     }
 
     private func spriteForSegmentIndex(_ i: Int) -> CGImage? {

@@ -48,7 +48,7 @@ class CursorHuntGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         refreshPipSize()
 

@@ -48,6 +48,11 @@ class GameBase: MiniGame {
         return CGFloat(Double(ticks) * Double(info.numer) / Double(info.denom) / 1_000_000_000)
     }
 
+    func secondsToMach(_ sec: Double) -> UInt64 {
+        let info = Self.timebaseInfo
+        return UInt64(sec * 1_000_000_000) * UInt64(info.denom) / UInt64(info.numer)
+    }
+
     /// Current delta time clamped to 0.05s. Call at top of gameTick().
     func deltaTime() -> CGFloat {
         let now = mach_absolute_time()
@@ -137,7 +142,8 @@ class GameBase: MiniGame {
     func refreshPipSize() {
         guard let axWindow = cachedAXWindow else { return }
         var sizeRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success {
+        if AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success,
+           sizeRef != nil {
             var freshSize = CGSize.zero
             AXValueGetValue(sizeRef as! AXValue, .cgSize, &freshSize)
             if freshSize.width > 0 && freshSize.height > 0 {

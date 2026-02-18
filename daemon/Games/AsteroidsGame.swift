@@ -515,17 +515,17 @@ class AsteroidsGame: GameBase {
             ax = px
             ay = py
         } else {
+            ax = CGFloat.random(in: 0...worldW)
+            ay = CGFloat.random(in: 0...worldH)
             for _ in 0..<20 {
-                ax = CGFloat.random(in: 0...worldW)
-                ay = CGFloat.random(in: 0...worldH)
                 let dx = ax - (shipPos.x + cachedPipSize.width / 2)
                 let dy = ay - (shipPos.y + cachedPipSize.height / 2)
                 if sqrt(dx * dx + dy * dy) > 200 {
                     break
                 }
+                ax = CGFloat.random(in: 0...worldW)
+                ay = CGFloat.random(in: 0...worldH)
             }
-            ax = CGFloat.random(in: 0...worldW)
-            ay = CGFloat.random(in: 0...worldH)
         }
 
         let w = min(wave, 10)
@@ -765,11 +765,7 @@ class AsteroidsGame: GameBase {
                                           y: worldH / 2 - size.height / 2)
                         shipVel = .zero
                         invulnerable = true
-                        var info = mach_timebase_info_data_t()
-                        mach_timebase_info(&info)
-                        let nanos = UInt64(invulnerableDuration * 1_000_000_000)
-                        let ticks = nanos * UInt64(info.denom) / UInt64(info.numer)
-                        invulnerableEndMach = now + ticks
+                        invulnerableEndMach = now + secondsToMach(Double(invulnerableDuration))
                         scoreLabel?.stringValue = livesString()
                         print("Asteroids lost life, \(lives) remaining")
                     }
@@ -874,10 +870,7 @@ class AsteroidsGame: GameBase {
         // Border
         if settings.glow, let border = borderRef {
             if invulnerable {
-                var info = mach_timebase_info_data_t()
-                mach_timebase_info(&info)
-                let nanos = UInt64(invulnerableDuration * 1_000_000_000)
-                let ticks = nanos * UInt64(info.denom) / UInt64(info.numer)
+                let ticks = secondsToMach(Double(invulnerableDuration))
                 let elapsed = machToSeconds(now - (invulnerableEndMach - ticks))
                 let blinkOn = Int(elapsed * blinkFrequency) % 2 == 0
                 if blinkOn {

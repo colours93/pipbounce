@@ -428,7 +428,7 @@ class FroggerGame: GameBase {
     // MARK: - Game Loop
 
     override func gameTick() {
-        guard active, let axWindow = cachedAXWindow else { return }
+        guard active, let _ = cachedAXWindow else { return }
 
         let screen = getScreenFrame()
         screenFrame = screen
@@ -516,7 +516,7 @@ class FroggerGame: GameBase {
                     scoreLabel?.stringValue = livesString() + "\(score)"
                     baseCarSpeed += speedIncrement
                     // Goal celebration - flash border green
-                    goalFlashEnd = now + UInt64(0.5 * 1_000_000_000 * Double(FroggerGame.timebaseInfoStatic.denom) / Double(FroggerGame.timebaseInfoStatic.numer))
+                    goalFlashEnd = now + secondsToMach(0.5)
                     // Re-randomize cars
                     respawnCars()
                     // Reset frog to bottom
@@ -559,7 +559,7 @@ class FroggerGame: GameBase {
         }
 
         if nearMiss && nearMissPulseEnd < now {
-            nearMissPulseEnd = now + UInt64(0.15 * 1_000_000_000 * Double(FroggerGame.timebaseInfoStatic.denom) / Double(FroggerGame.timebaseInfoStatic.numer))
+            nearMissPulseEnd = now + secondsToMach(0.15)
         }
 
         // --- Move PiP ---
@@ -597,12 +597,6 @@ class FroggerGame: GameBase {
         CATransaction.commit()
     }
 
-    // Expose timebase for mach time calculations in tick closures
-    private static var timebaseInfoStatic: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
 
     // MARK: - Death & Game Over
 

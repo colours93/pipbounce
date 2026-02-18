@@ -101,7 +101,8 @@ class FlappyGame: GameBase {
             AXUIElementSetAttributeValue(pip.axWindow, kAXSizeAttribute as CFString, val)
         }
         var sizeRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(pip.axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success {
+        if AXUIElementCopyAttributeValue(pip.axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success,
+           sizeRef != nil {
             var actualSize = CGSize.zero
             AXValueGetValue(sizeRef as! AXValue, .cgSize, &actualSize)
             cachedPipSize = actualSize

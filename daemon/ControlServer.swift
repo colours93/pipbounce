@@ -92,6 +92,8 @@ class ControlServer {
                 + "\"pong\":\(pong.active),"
                 + "\"flappy\":\(flappy.active),"
                 + "\"bounce\":\(bounce.active),"
+                + "\"bounceAuto\":\(bounce.active && !bounce.paddleMode),"
+                + "\"bouncePaddle\":\(bounce.active && bounce.paddleMode),"
                 + "\"invaders\":\(invaders.active),"
                 + "\"frogger\":\(frogger.active),"
                 + "\"runner\":\(runner.active),"

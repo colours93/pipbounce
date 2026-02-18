@@ -112,7 +112,13 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
         && size.height >= 100 && size.height <= 600
         && (size.width / size.height) > 1.4
 
-    guard isPip || isDocPip else { return nil }
+    // Title-matched PiP: require no minimize/close buttons to distinguish from
+    // the main YouTube tab (whose title also contains "Picture in picture"
+    // while a video is in PiP mode). Real PiP windows have no window chrome.
+    // We also accept matchesFloat as a fallback signal.
+    let isTitledPip = isPip && !hasMinimize && !hasClose
+
+    guard isTitledPip || isDocPip else { return nil }
 
     let bounds = CGRect(origin: pos, size: size)
     return PipWindowInfo(bounds: bounds, axWindow: window)

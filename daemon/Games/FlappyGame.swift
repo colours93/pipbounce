@@ -3,9 +3,7 @@ import ApplicationServices
 
 let flappy = FlappyGame()
 
-class FlappyGame: MiniGame {
-    var active = false
-    var lastBounds = CGRect.zero
+class FlappyGame: GameBase {
 
     // Physics
     private var velocity: CGFloat = 0
@@ -33,18 +31,50 @@ class FlappyGame: MiniGame {
     private var pipeInterval: CGFloat = 260
     private let scrollSpeed: CGFloat = 200
 
-    // Pipe colors
-    private let pipeBodyGreen = NSColor(red: 0.45, green: 0.78, blue: 0.18, alpha: 1)
-    private let pipeCapGreen = NSColor(red: 0.32, green: 0.58, blue: 0.12, alpha: 1)
-    private let pipeCapBorder = NSColor(red: 0.20, green: 0.40, blue: 0.08, alpha: 1)
-    private let pipeHighlight = NSColor(red: 0.58, green: 0.88, blue: 0.30, alpha: 1)
-    private let pipeShadow = NSColor(red: 0.28, green: 0.48, blue: 0.10, alpha: 1)
+    // Pixel-art sprites
+    private enum Sprites {
+        // Palette
+        private static let H: UInt32 = 0x8ED43C  // highlight green
+        private static let L: UInt32 = 0x5FA316  // light green
+        private static let M: UInt32 = 0x4E8C12  // medium green
+        private static let D: UInt32 = 0x33660A  // dark green (shadow/edge)
+        private static let B: UInt32 = 0x264D08  // border dark
+        private static let O: UInt32 = 0          // transparent
+
+        // Pipe cap 22x8: wider cap with lip, highlight top, shadow bottom, dark edges
+        static let pipeCap: [[UInt32]] = [
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+            [B,D,H,H,H,L,L,L,L,L,L,L,L,L,L,L,L,L,H,H,D,B],
+            [B,D,H,H,L,L,L,L,L,L,L,L,L,L,L,L,L,L,L,H,D,B],
+            [B,D,L,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,L,D,B],
+            [B,D,L,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,L,D,B],
+            [B,D,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,D,B],
+            [B,D,D,D,M,M,M,M,M,M,M,M,M,M,M,M,M,M,D,D,D,B],
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        ]
+
+        // Pipe body 18x8: tiled vertically, left shadow, right highlight, brick lines
+        static let pipeBody: [[UInt32]] = [
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+            [B,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,B],
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+            [B,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,B],
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
+        ]
+
+        static let pipeCapImage: CGImage? = renderPixelArt(pipeCap, scale: 3)
+        static let pipeBodyImage: CGImage? = renderPixelArt(pipeBody, scale: 3)
+
+        private static func renderPixelArt(_ pixels: [[UInt32]], scale: Int) -> CGImage? {
+            GameBase.renderPixelArt(pixels, scale: scale)
+        }
+    }
 
     // Scoring
-    private var score = 0
     private var bestScore = 0
-    private var scoreOverlay: NSWindow?
-    private var scoreLabel: NSTextField?
 
     // Input
     private var wasMouseDown = false
@@ -52,44 +82,18 @@ class FlappyGame: MiniGame {
     // Wobble (border glow only — can't rotate Chrome's window)
     private var tiltAngle: CGFloat = 0
 
-    // Timer & cached refs
-    private var gameTimer: DispatchSourceTimer?
-    private var cachedAXWindow: AXUIElement?
-    private var cachedPipSize = CGSize.zero
-    private var borderRef: RGBBorder?
-    private var lastMach: UInt64 = 0
-
     // Game state
-    private var gameOver = false
-    private var gameOverMach: UInt64 = 0
     private var started = false
 
-    // Mach time
-    private static var timebaseInfo: mach_timebase_info_data_t = {
-        var info = mach_timebase_info_data_t()
-        mach_timebase_info(&info)
-        return info
-    }()
+    override func onStart(screen: CGRect, pip: PipWindowInfo) {
+        timerIntervalMs = 4
 
-    private func machToSeconds(_ ticks: UInt64) -> CGFloat {
-        let info = Self.timebaseInfo
-        return CGFloat(Double(ticks) * Double(info.numer) / Double(info.denom) / 1_000_000_000)
-    }
-
-    // MARK: - MiniGame Protocol
-
-    func start(screen: CGRect, pip: PipWindowInfo, border: RGBBorder) {
-        score = 0
         velocity = 0
         gameOver = false
         started = false
         tiltAngle = 0
         wasMouseDown = false
         pipes = []
-
-        cachedAXWindow = pip.axWindow
-        borderRef = border
-        lastMach = mach_absolute_time()
 
         // Shrink PiP to a small bird size
         var smallSize = CGSize(width: 200, height: 112)
@@ -105,7 +109,7 @@ class FlappyGame: MiniGame {
             cachedPipSize = pip.bounds.size
         }
 
-        border.rotationPadding = max(cachedPipSize.width, cachedPipSize.height) * 0.5
+        borderRef?.rotationPadding = max(cachedPipSize.width, cachedPipSize.height) * 0.5
         pipeGap = cachedPipSize.height + 160
         pipeInterval = cachedPipSize.width + 250
 
@@ -119,47 +123,21 @@ class FlappyGame: MiniGame {
         }
 
         if Thread.isMainThread {
-            createScoreOverlay(screen: screen)
+            createScoreOverlay(screen: screen, width: 120)
         } else {
-            DispatchQueue.main.sync { self.createScoreOverlay(screen: screen) }
+            DispatchQueue.main.sync { self.createScoreOverlay(screen: screen, width: 120) }
         }
 
-        active = true
         print("Flappy started")
-
-        let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
-        t.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .microseconds(200))
-        t.setEventHandler { [weak self] in self?.gameTick() }
-        gameTimer = t
-        t.resume()
     }
 
-    func stop() {
-        gameTimer?.cancel()
-        gameTimer = nil
-        active = false
+    override func onStop() {
         started = false
 
-        // Move PiP back to bottom-right
-        if let axWindow = cachedAXWindow {
-            let screen = getScreenFrame()
-            var restorePos = CGPoint(x: screen.maxX - cachedPipSize.width - 20,
-                                     y: screen.maxY - cachedPipSize.height - 20)
-            if let val = AXValueCreate(.cgPoint, &restorePos) {
-                AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, val)
-            }
-        }
-        cachedAXWindow = nil
-
-        borderRef?.tilt(0)
         borderRef?.rotationPadding = 0
-        borderRef?.hide()
-        borderRef = nil
 
-        let sw = scoreOverlay
         let pipeList = pipes
         let doCleanup = {
-            sw?.orderOut(nil)
             for p in pipeList {
                 p.topWindow.orderOut(nil)
                 p.bottomWindow.orderOut(nil)
@@ -169,29 +147,26 @@ class FlappyGame: MiniGame {
         else { DispatchQueue.main.async { doCleanup() } }
 
         pipes = []
-        scoreOverlay = nil
-        scoreLabel = nil
         print("Flappy stopped")
     }
 
     // MARK: - Game Loop
 
-    private func gameTick() {
+    override func gameTick() {
         guard active else { return }
 
         let screen = getScreenFrame()
         let size = cachedPipSize
+        let dt = deltaTime()
         let now = mach_absolute_time()
-        let dt = min(machToSeconds(now - lastMach), 0.05)
-        lastMach = now
 
         if gameOver {
-            if machToSeconds(now - gameOverMach) > 2.0 { stop() }
+            if machToSeconds(now - gameEndMach) > 2.0 { stop() }
             return
         }
 
         // Input
-        let mouseDown = NSEvent.pressedMouseButtons & 1 != 0
+        let mouseDown = isMouseDown
         if mouseDown && !wasMouseDown { flap() }
         wasMouseDown = mouseDown
 
@@ -238,14 +213,14 @@ class FlappyGame: MiniGame {
             if !pipes[i].scored && pipes[i].x + pipeBodyWidth / 2 < birdX {
                 pipes[i].scored = true
                 score += 1
-                updateScore()
+                scoreLabel?.stringValue = "\(score)"
             }
         }
 
         // Collision: floor / ceiling
         if started && (birdY < screen.minY || birdY + size.height > screen.maxY) {
             birdY = max(screen.minY, min(screen.maxY - size.height, birdY))
-            triggerGameOver()
+            doGameOver()
             return
         }
 
@@ -269,7 +244,7 @@ class FlappyGame: MiniGame {
 
                 if birdRect.intersects(topBody) || birdRect.intersects(topCap) ||
                    birdRect.intersects(bottomCap) || birdRect.intersects(bottomBody) {
-                    triggerGameOver()
+                    doGameOver()
                     return
                 }
             }
@@ -282,13 +257,7 @@ class FlappyGame: MiniGame {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
 
-        // Move real PiP directly — video keeps playing
-        if let axWindow = cachedAXWindow {
-            var pos = CGPoint(x: birdX, y: birdY)
-            if let val = AXValueCreate(.cgPoint, &pos) {
-                AXUIElementSetAttributeValue(axWindow, kAXPositionAttribute as CFString, val)
-            }
-        }
+        movePip(to: CGPoint(x: birdX, y: birdY))
 
         updatePipeWindows(screen: screen)
 
@@ -307,11 +276,9 @@ class FlappyGame: MiniGame {
         velocity = flapImpulse
     }
 
-    private func triggerGameOver() {
-        gameOver = true
-        gameOverMach = mach_absolute_time()
+    private func doGameOver() {
         if score > bestScore { bestScore = score }
-        scoreLabel?.stringValue = "Game Over  \(score)"
+        triggerGameOver(message: "Game Over  \(score)")
         print("Flappy game over: score=\(score) best=\(bestScore)")
     }
 
@@ -331,7 +298,6 @@ class FlappyGame: MiniGame {
     }
 
     private func makePipeWindow(screen: CGRect, isTop: Bool, x: CGFloat, gapCenterY: CGFloat) -> NSWindow {
-        let screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
         let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
 
         let pipeH: CGFloat
@@ -369,48 +335,24 @@ class FlappyGame: MiniGame {
         let bodyY: CGFloat = isTop ? pipeCapHeight : 0
         let bodyLayer = CALayer()
         bodyLayer.frame = NSRect(x: capExtra, y: bodyY, width: pipeBodyWidth, height: bodyH)
-        bodyLayer.backgroundColor = pipeBodyGreen.cgColor
-        bodyLayer.borderWidth = 2
-        bodyLayer.borderColor = pipeCapBorder.cgColor
-
-        let hl = CALayer()
-        hl.frame = NSRect(x: 4, y: 0, width: 6, height: bodyH)
-        hl.backgroundColor = pipeHighlight.cgColor
-        hl.cornerRadius = 2
-        bodyLayer.addSublayer(hl)
-
-        let sl = CALayer()
-        sl.frame = NSRect(x: pipeBodyWidth - 10, y: 0, width: 6, height: bodyH)
-        sl.backgroundColor = pipeShadow.cgColor
-        sl.cornerRadius = 2
-        bodyLayer.addSublayer(sl)
+        bodyLayer.contents = Sprites.pipeBodyImage
+        bodyLayer.magnificationFilter = .nearest
+        bodyLayer.minificationFilter = .nearest
+        bodyLayer.contentsGravity = .resize
 
         let capY: CGFloat = isTop ? 0 : height - pipeCapHeight
         let capLayer = CALayer()
         capLayer.frame = NSRect(x: 0, y: capY, width: pipeCapWidth, height: pipeCapHeight)
-        capLayer.backgroundColor = pipeCapGreen.cgColor
-        capLayer.borderWidth = 2.5
-        capLayer.borderColor = pipeCapBorder.cgColor
-        capLayer.cornerRadius = 4
-
-        let chl = CALayer()
-        chl.frame = NSRect(x: 5, y: 4, width: 7, height: pipeCapHeight - 8)
-        chl.backgroundColor = pipeHighlight.cgColor
-        chl.cornerRadius = 3
-        capLayer.addSublayer(chl)
-
-        let csl = CALayer()
-        csl.frame = NSRect(x: pipeCapWidth - 12, y: 4, width: 7, height: pipeCapHeight - 8)
-        csl.backgroundColor = pipeShadow.cgColor
-        csl.cornerRadius = 3
-        capLayer.addSublayer(csl)
+        capLayer.contents = Sprites.pipeCapImage
+        capLayer.magnificationFilter = .nearest
+        capLayer.minificationFilter = .nearest
+        capLayer.contentsGravity = .resize
 
         layer.addSublayer(bodyLayer)
         layer.addSublayer(capLayer)
     }
 
     private func updatePipeWindows(screen: CGRect) {
-        let screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
         let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
 
         for pair in pipes {
@@ -419,36 +361,5 @@ class FlappyGame: MiniGame {
             pair.topWindow.setFrameOrigin(NSPoint(x: nsX, y: screenH - topH))
             pair.bottomWindow.setFrameOrigin(NSPoint(x: nsX, y: 0))
         }
-    }
-
-    // MARK: - Score
-
-    private func createScoreOverlay(screen: CGRect) {
-        let screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - 60, y: screenH - 55, width: 120, height: 44),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        sw.isOpaque = false
-        sw.backgroundColor = NSColor.black.withAlphaComponent(0.6)
-        sw.level = .floating
-        sw.ignoresMouseEvents = true
-        sw.hasShadow = false
-        sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-
-        let label = NSTextField(frame: NSRect(x: 0, y: 0, width: 120, height: 44))
-        label.isEditable = false
-        label.isBordered = false
-        label.backgroundColor = .clear
-        label.textColor = .white
-        label.font = NSFont.monospacedSystemFont(ofSize: 24, weight: .bold)
-        label.alignment = .center
-        label.stringValue = "0"
-        sw.contentView!.addSubview(label)
-        sw.orderFrontRegardless()
-        scoreOverlay = sw
-        scoreLabel = label
-    }
-
-    private func updateScore() {
-        scoreLabel?.stringValue = "\(score)"
     }
 }

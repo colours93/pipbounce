@@ -59,7 +59,8 @@ class PipBounceDaemon {
         // Bail immediately -- don't block main queue with expensive AX IPC.
         if pong.active || flappy.active || bounce.active || invaders.active
             || frogger.active || runner.active || snake.active
-            || breakout.active || asteroids.active || animating { return }
+            || breakout.active || asteroids.active || cursorhunt.active
+            || doodlejump.active || pacman.active || animating { return }
 
         guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
@@ -174,7 +175,7 @@ class PipBounceDaemon {
     /// Toggle any MiniGame. Stops the current game if one is active.
     func toggleGame(_ game: MiniGame) {
         // Stop any running game first
-        let allGames: [MiniGame] = [pong, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids]
+        let allGames: [MiniGame] = [pong, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids, cursorhunt, doodlejump, pacman]
         for g in allGames where g.active {
             g.stop()
             rgbBorder.tilt(0)

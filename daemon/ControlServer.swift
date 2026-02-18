@@ -98,6 +98,9 @@ class ControlServer {
                 + "\"snake\":\(snake.active),"
                 + "\"breakout\":\(breakout.active),"
                 + "\"asteroids\":\(asteroids.active),"
+                + "\"cursorhunt\":\(cursorhunt.active),"
+                + "\"doodlejump\":\(doodlejump.active),"
+                + "\"pacman\":\(pacman.active),"
                 + "\"pipActive\":\(pip != nil)}"
         }
 
@@ -135,9 +138,21 @@ class ControlServer {
             return "{\"flappy\":\(flappy.active)}"
         }
 
+        if firstLine.contains("POST /bounce-paddle") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                bounce.paddleMode = true
+                daemon.toggleGame(bounce)
+                sema.signal()
+            }
+            sema.wait()
+            return "{\"bounce\":\(bounce.active)}"
+        }
+
         if firstLine.contains("POST /bounce") {
             let sema = DispatchSemaphore(value: 0)
             DispatchQueue.main.async {
+                bounce.paddleMode = false
                 daemon.toggleGame(bounce)
                 sema.signal()
             }
@@ -188,6 +203,27 @@ class ControlServer {
             DispatchQueue.main.async { daemon.toggleGame(asteroids); sema.signal() }
             sema.wait()
             return "{\"asteroids\":\(asteroids.active)}"
+        }
+
+        if firstLine.contains("POST /cursorhunt") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(cursorhunt); sema.signal() }
+            sema.wait()
+            return "{\"cursorhunt\":\(cursorhunt.active)}"
+        }
+
+        if firstLine.contains("POST /doodlejump") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(doodlejump); sema.signal() }
+            sema.wait()
+            return "{\"doodlejump\":\(doodlejump.active)}"
+        }
+
+        if firstLine.contains("POST /pacman") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async { daemon.toggleGame(pacman); sema.signal() }
+            sema.wait()
+            return "{\"pacman\":\(pacman.active)}"
         }
 
         if firstLine.contains("POST /settings") {

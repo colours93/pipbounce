@@ -30,13 +30,23 @@ func findPipWindow() -> PipWindowInfo? {
             || ($0.bundleIdentifier ?? "").contains("chrome")
     }
 
+    if chromeApps.isEmpty {
+        print("[PiP] No Chrome apps found")
+    }
+
     let floating = floatingWindowRects()
+    print("[PiP] Chrome apps: \(chromeApps.count), floating rects: \(floating.count)")
 
     for app in chromeApps {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var windowsRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
-              let windows = windowsRef as? [AXUIElement] else { continue }
+        let axErr = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
+        guard axErr == .success, let windows = windowsRef as? [AXUIElement] else {
+            print("[PiP] AX windows failed for \(app.localizedName ?? "?") (err=\(axErr.rawValue))")
+            continue
+        }
+
+        print("[PiP] \(app.localizedName ?? "?"): \(windows.count) windows")
 
         for window in windows {
             if let info = extractPipInfo(from: window, floating: floating) {
@@ -112,11 +122,13 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
         && size.height >= 100 && size.height <= 600
         && (size.width / size.height) > 1.4
 
-    // Title-matched PiP: require no minimize/close buttons to distinguish from
-    // the main YouTube tab (whose title also contains "Picture in picture"
-    // while a video is in PiP mode). Real PiP windows have no window chrome.
-    // We also accept matchesFloat as a fallback signal.
-    let isTitledPip = isPip && !hasMinimize && !hasClose
+    // Title-matched PiP: the window title contains "Picture in Picture" or
+    // "Picture-in-Picture". Distinguish from the main YouTube tab (whose title
+    // also contains this string) by requiring it to be in the floating layer.
+    // Chrome PiP windows are always above normal window level (layer > 0).
+    let isTitledPip = isPip && matchesFloat
+
+    print("[PiP]   window: title='\(title.prefix(60))' size=\(Int(size.width))x\(Int(size.height)) isPip=\(isPip) float=\(matchesFloat) min=\(hasMinimize) close=\(hasClose) role=\(role)/\(subrole) titled=\(isTitledPip) docPip=\(isDocPip)")
 
     guard isTitledPip || isDocPip else { return nil }
 

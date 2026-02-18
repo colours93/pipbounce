@@ -13,6 +13,25 @@ const zoneBtns = els.seg.querySelectorAll("button");
 let pipIsActive = false;
 
 // ---------------------------------------------------------------------------
+//  Color accent system
+// ---------------------------------------------------------------------------
+
+const COLOR_ACCENTS = {
+  purple:  { accent: "#b355ff", glow: "rgba(179,85,255,0.3)" },
+  blue:    { accent: "#3388ff", glow: "rgba(51,136,255,0.3)" },
+  red:     { accent: "#ff3333", glow: "rgba(255,51,51,0.3)" },
+  green:   { accent: "#1ae664", glow: "rgba(26,230,100,0.3)" },
+  rainbow: { accent: "#ff66cc", glow: "rgba(255,102,204,0.3)" },
+};
+
+function applyColorAccent(color) {
+  const c = COLOR_ACCENTS[color];
+  if (!c) return;
+  document.documentElement.style.setProperty("--accent", c.accent);
+  document.documentElement.style.setProperty("--accent-glow", c.glow);
+}
+
+// ---------------------------------------------------------------------------
 //  PiP control -- enter-only and exit-only (never blindly toggle)
 // ---------------------------------------------------------------------------
 
@@ -87,6 +106,7 @@ init();
 
 function updatePipButton() {
   els.pipBtn.textContent = pipIsActive ? "Stop PiP" : "Start PiP";
+  els.pipBtn.classList.toggle("active", pipIsActive);
 }
 
 els.pipBtn.addEventListener("click", async () => {
@@ -106,33 +126,47 @@ els.pipBtn.addEventListener("click", async () => {
 const games = [
   { id: "pongBtn", key: "pong", label: "Pong in Picture", stopLabel: "Stop PiP Pong" },
   { id: "flappyBtn", key: "flappy", label: "FlaPiPy Bird", stopLabel: "Stop FlaPiPy" },
-  { id: "bounceBtn", key: "bounce", label: "Bounce", stopLabel: "Stop Bounce" },
+  { id: "bounceBtn", key: "bounce", statusKey: "bounce", label: "Bounce", stopLabel: "Stop Bounce" },
+  { id: "bouncePaddleBtn", key: "bounce-paddle", statusKey: "bounce", label: "Bounce Paddle", stopLabel: "Stop Paddle" },
   { id: "invadersBtn", key: "invaders", label: "Space Invaders", stopLabel: "Stop Invaders" },
   { id: "froggerBtn", key: "frogger", label: "Frogger", stopLabel: "Stop Frogger" },
   { id: "runnerBtn", key: "runner", label: "Runner", stopLabel: "Stop Runner" },
   { id: "snakeBtn", key: "snake", label: "Snake", stopLabel: "Stop Snake" },
   { id: "breakoutBtn", key: "breakout", label: "Breakout", stopLabel: "Stop Breakout" },
   { id: "asteroidsBtn", key: "asteroids", label: "Asteroids", stopLabel: "Stop Asteroids" },
+  { id: "cursorhuntBtn", key: "cursorhunt", label: "Cursor Hunt", stopLabel: "Stop Hunt" },
+  { id: "doodlejumpBtn", key: "doodlejump", label: "Doodle Jump", stopLabel: "Stop Doodle" },
+  { id: "pacmanBtn", key: "pacman", label: "Pac-Man", stopLabel: "Stop Pac-Man" },
 ];
 
 function resetGameButtons(exceptKey) {
   for (const g of games) {
+    const el = document.getElementById(g.id);
     if (g.key !== exceptKey) {
-      document.getElementById(g.id).textContent = g.label;
+      el.querySelector(".game-label").textContent = g.label;
+      el.classList.remove("active");
     }
   }
 }
 
 function syncGameButtons(data) {
   for (const g of games) {
-    if (data[g.key] !== undefined) {
-      document.getElementById(g.id).textContent = data[g.key] ? g.stopLabel : g.label;
+    const key = g.statusKey || g.key;
+    if (data[key] !== undefined) {
+      const el = document.getElementById(g.id);
+      el.querySelector(".game-label").textContent = data[key] ? g.stopLabel : g.label;
+      el.classList.toggle("active", !!data[key]);
     }
   }
 }
 
 for (const game of games) {
-  document.getElementById(game.id).addEventListener("click", async () => {
+  const el = document.getElementById(game.id);
+  el.addEventListener("click", async () => {
+    // Launch animation
+    el.classList.add("launching");
+    setTimeout(() => el.classList.remove("launching"), 300);
+
     if (!pipIsActive) {
       await enterPip();
       await new Promise((r) => setTimeout(r, 800));
@@ -140,10 +174,12 @@ for (const game of games) {
     try {
       const res = await fetch(`${API}/${game.key}`, { method: "POST" });
       const data = await res.json();
-      document.getElementById(game.id).textContent = data[game.key]
+      const isRunning = !!data[game.key];
+      el.querySelector(".game-label").textContent = isRunning
         ? game.stopLabel
         : game.label;
-      if (data[game.key]) resetGameButtons(game.key);
+      el.classList.toggle("active", isRunning);
+      if (isRunning) resetGameButtons(game.key);
     } catch {}
   });
 }
@@ -204,6 +240,7 @@ colorDots.forEach((dot) => {
   dot.addEventListener("click", () => {
     colorDots.forEach((d) => d.classList.remove("active"));
     dot.classList.add("active");
+    applyColorAccent(dot.dataset.color);
     updateSettings({ glowColor: dot.dataset.color });
   });
 });
@@ -315,7 +352,10 @@ async function fetchStatus() {
       hotkeyBtn.textContent = formatHotkey(data.hotkeyCode, data.hotkeyFlags);
     }
     syncGameButtons(data);
-    if (data.glowColor) setActiveColor(data.glowColor);
+    if (data.glowColor) {
+      setActiveColor(data.glowColor);
+      applyColorAccent(data.glowColor);
+    }
 
     return data;
   } catch {

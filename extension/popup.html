@@ -2,50 +2,162 @@
 <html>
 <head>
   <style>
+    :root {
+      --accent: #b355ff;
+      --accent-glow: rgba(179, 85, 255, 0.3);
+      --bg: #0f0f11;
+      --surface: rgba(255,255,255,0.03);
+      --border: rgba(255,255,255,0.06);
+      --border-hover: rgba(255,255,255,0.12);
+      --text: #fafafa;
+      --text-muted: #71717a;
+      --text-dim: #52525b;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 240px;
+      width: 320px;
       font-family: Inter, system-ui, -apple-system, sans-serif;
-      background: #18181b;
-      color: #fafafa;
+      background: var(--bg);
+      color: var(--text);
       padding: 16px;
       font-weight: 300;
       letter-spacing: 0.02em;
     }
     h1 {
       font-size: 13px;
-      font-weight: 300;
-      letter-spacing: 0.15em;
+      font-weight: 600;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
       margin-bottom: 14px;
+      text-shadow: 0 0 12px var(--accent-glow);
     }
 
+    /* PiP button */
     .pip-btn {
       width: 100%;
       padding: 10px;
       margin-bottom: 14px;
-      background: transparent;
-      color: #fafafa;
-      border: 1px solid #27272a;
-      border-radius: 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
       font-size: 12px;
-      font-weight: 300;
+      font-weight: 600;
       letter-spacing: 0.06em;
       cursor: pointer;
       font-family: inherit;
-      transition: border-color 0.2s, background 0.2s;
+      transition: opacity 0.2s;
     }
-    .pip-btn:hover {
-      border-color: #3f3f46;
-      background: #27272a;
+    .pip-btn:hover { opacity: 0.85; }
+
+    /* Section label */
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
     }
 
+    /* Game grid */
+    .game-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .game-card {
+      background: var(--surface);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 8px;
+      text-align: center;
+      cursor: pointer;
+      font-family: inherit;
+      color: inherit;
+      transition: transform 0.15s, border-color 0.2s, background 0.2s;
+    }
+    .game-card:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-hover);
+      background: rgba(255,255,255,0.05);
+    }
+    .game-card.active {
+      animation: glow-pulse 2s ease-in-out infinite;
+    }
+    .game-card.launching {
+      animation: launch-pop 0.3s ease-out;
+    }
+    .game-icon {
+      display: block;
+      height: 24px;
+      color: var(--accent);
+      margin: 0 auto 6px;
+    }
+    .game-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+    .game-label {
+      font-size: 11px;
+      font-weight: 400;
+      color: #a1a1aa;
+      transition: color 0.2s;
+    }
+    .game-card.active .game-label {
+      color: #fafafa;
+    }
+
+    @keyframes glow-pulse {
+      0%, 100% { box-shadow: 0 0 8px var(--accent-glow); border-color: var(--accent); }
+      50% { box-shadow: 0 0 16px var(--accent-glow); }
+    }
+    @keyframes launch-pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(0.95); }
+      100% { transform: scale(1); }
+    }
+
+    /* Settings toggle header */
+    #settingsToggle {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    #settingsToggle .section-label { margin-bottom: 0; }
+    #settingsToggle .chevron {
+      width: 16px;
+      height: 16px;
+      color: var(--text-dim);
+      transition: transform 0.3s;
+    }
+    #settingsToggle.open .chevron {
+      transform: rotate(180deg);
+    }
+
+    /* Settings panel */
+    #settingsPanel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    #settingsPanel.open {
+      max-height: 500px;
+    }
+
+    /* Rows inside settings */
     .row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 10px 0;
-      border-top: 1px solid #27272a;
+      border-top: 1px solid var(--border);
     }
     .row-label {
       font-size: 12px;
@@ -53,10 +165,11 @@
       letter-spacing: 0.04em;
     }
 
+    /* Bigger toggles */
     .toggle {
       position: relative;
-      width: 36px;
-      height: 20px;
+      width: 40px;
+      height: 22px;
       cursor: pointer;
     }
     .toggle input { display: none; }
@@ -64,14 +177,14 @@
       position: absolute;
       inset: 0;
       background: #27272a;
-      border-radius: 10px;
+      border-radius: 11px;
       transition: background 0.2s;
     }
     .toggle .slider::after {
       content: '';
       position: absolute;
-      width: 14px;
-      height: 14px;
+      width: 16px;
+      height: 16px;
       background: #52525b;
       border-radius: 50%;
       top: 3px;
@@ -80,53 +193,14 @@
     }
     .toggle input:checked + .slider { background: #3f3f46; }
     .toggle input:checked + .slider::after {
-      transform: translateX(16px);
+      transform: translateX(18px);
       background: #fafafa;
     }
 
-    .seg-row {
-      padding: 10px 0;
-      border-top: 1px solid #27272a;
-    }
-    .seg-label {
-      font-size: 12px;
-      color: #a1a1aa;
-      letter-spacing: 0.04em;
-      margin-bottom: 8px;
-    }
-    .seg {
-      display: flex;
-      border: 1px solid #27272a;
-      border-radius: 20px;
-      overflow: hidden;
-    }
-    .seg button {
-      flex: 1;
-      padding: 7px 0;
-      background: transparent;
-      color: #52525b;
-      border: none;
-      font-family: inherit;
-      font-size: 11px;
-      font-weight: 300;
-      letter-spacing: 0.06em;
-      cursor: pointer;
-      transition: color 0.15s, background 0.15s;
-    }
-    .seg button:not(:last-child) {
-      border-right: 1px solid #27272a;
-    }
-    .seg button.active {
-      background: #27272a;
-      color: #fafafa;
-    }
-    .seg button:hover:not(.active) {
-      color: #a1a1aa;
-    }
-
+    /* Color picker */
     .color-row {
       padding: 10px 0;
-      border-top: 1px solid #27272a;
+      border-top: 1px solid var(--border);
     }
     .color-label {
       font-size: 12px;
@@ -139,8 +213,8 @@
       gap: 8px;
     }
     .color-dot {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 2px solid transparent;
       cursor: pointer;
@@ -164,12 +238,13 @@
       background: linear-gradient(135deg, #1ae664, #55ffbb);
     }
 
+    /* Hotkey */
     .hotkey-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 10px 0;
-      border-top: 1px solid #27272a;
+      border-top: 1px solid var(--border);
     }
     .hotkey-btn {
       background: #27272a;
@@ -190,24 +265,67 @@
       color: #fafafa;
     }
 
+    /* Corner zone */
+    .seg-row {
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+    }
+    .seg-label {
+      font-size: 12px;
+      color: #a1a1aa;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+    .seg {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+    .seg button {
+      flex: 1;
+      padding: 7px 0;
+      background: transparent;
+      color: var(--text-dim);
+      border: none;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 300;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+    .seg button:not(:last-child) {
+      border-right: 1px solid var(--border);
+    }
+    .seg button.active {
+      background: #27272a;
+      color: var(--text);
+    }
+    .seg button:hover:not(.active) {
+      color: #a1a1aa;
+    }
+
+    /* Status bar */
     .status {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 300;
-      color: #52525b;
+      color: var(--text-dim);
       text-align: center;
       padding-top: 10px;
-      border-top: 1px solid #27272a;
+      margin-top: 6px;
+      border-top: 1px solid var(--border);
       letter-spacing: 0.04em;
       cursor: default;
       transition: color 0.2s;
     }
     .status .dot {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: #52525b;
       transition: background 0.3s;
@@ -216,69 +334,99 @@
     .status.online { color: #a1a1aa; }
     .status.offline .dot { background: #ef4444; }
     .status.offline {
-      color: #71717a;
+      color: var(--text-muted);
       cursor: pointer;
     }
     .status.offline:hover { color: #a1a1aa; }
   </style>
 </head>
 <body>
-  <h1>pipbounce</h1>
+  <h1>PIPBOUNCE</h1>
 
   <button id="pipBtn" class="pip-btn">Start PiP</button>
-  <button id="pongBtn" class="pip-btn">Pong in Picture</button>
-  <button id="flappyBtn" class="pip-btn">FlaPiPy Bird</button>
-  <button id="bounceBtn" class="pip-btn">Bounce</button>
-  <button id="invadersBtn" class="pip-btn">Space Invaders</button>
-  <button id="froggerBtn" class="pip-btn">Frogger</button>
-  <button id="runnerBtn" class="pip-btn">Runner</button>
-  <button id="snakeBtn" class="pip-btn">Snake</button>
-  <button id="breakoutBtn" class="pip-btn">Breakout</button>
-  <button id="asteroidsBtn" class="pip-btn">Asteroids</button>
 
-  <div class="row">
-    <span class="row-label">Dodge</span>
-    <label class="toggle">
-      <input type="checkbox" id="enableToggle" checked>
-      <span class="slider"></span>
-    </label>
+  <div class="section-label">Games</div>
+  <div class="game-grid">
+    <button id="pongBtn" class="game-card" data-icon="pong"><span class="game-icon"></span><span class="game-label">Pong</span></button>
+    <button id="flappyBtn" class="game-card" data-icon="flappy"><span class="game-icon"></span><span class="game-label">FlaPiPy Bird</span></button>
+    <button id="bounceBtn" class="game-card" data-icon="bounce"><span class="game-icon"></span><span class="game-label">Bounce</span></button>
+    <button id="bouncePaddleBtn" class="game-card" data-icon="bouncePaddle"><span class="game-icon"></span><span class="game-label">Bounce Paddle</span></button>
+    <button id="invadersBtn" class="game-card" data-icon="invaders"><span class="game-icon"></span><span class="game-label">Space Invaders</span></button>
+    <button id="froggerBtn" class="game-card" data-icon="frogger"><span class="game-icon"></span><span class="game-label">Frogger</span></button>
+    <button id="runnerBtn" class="game-card" data-icon="runner"><span class="game-icon"></span><span class="game-label">Runner</span></button>
+    <button id="snakeBtn" class="game-card" data-icon="snake"><span class="game-icon"></span><span class="game-label">Snake</span></button>
+    <button id="breakoutBtn" class="game-card" data-icon="breakout"><span class="game-icon"></span><span class="game-label">Breakout</span></button>
+    <button id="asteroidsBtn" class="game-card" data-icon="asteroids"><span class="game-icon"></span><span class="game-label">Asteroids</span></button>
+    <button id="cursorhuntBtn" class="game-card" data-icon="cursorhunt"><span class="game-icon"></span><span class="game-label">Cursor Hunt</span></button>
+    <button id="doodlejumpBtn" class="game-card" data-icon="doodlejump"><span class="game-icon"></span><span class="game-label">Doodle Jump</span></button>
+    <button id="pacmanBtn" class="game-card" data-icon="pacman"><span class="game-icon"></span><span class="game-label">Pac-Man</span></button>
   </div>
 
-  <div class="row">
-    <span class="row-label">Glow</span>
-    <label class="toggle">
-      <input type="checkbox" id="glowToggle" checked>
-      <span class="slider"></span>
-    </label>
+  <div id="settingsToggle">
+    <span class="section-label">Settings</span>
+    <svg class="chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,6 8,10 12,6"/></svg>
   </div>
-
-  <div class="color-row" id="colorRow">
-    <div class="color-label">Glow color</div>
-    <div class="color-picker" id="colorPicker">
-      <div class="color-dot active" data-color="purple"></div>
-      <div class="color-dot" data-color="blue"></div>
-      <div class="color-dot" data-color="red"></div>
-      <div class="color-dot" data-color="green"></div>
-      <div class="color-dot" data-color="rainbow"></div>
+  <div id="settingsPanel">
+    <div class="row">
+      <span class="row-label">Dodge</span>
+      <label class="toggle">
+        <input type="checkbox" id="enableToggle" checked>
+        <span class="slider"></span>
+      </label>
     </div>
-  </div>
 
-  <div class="hotkey-row">
-    <span class="row-label">Toggle hotkey</span>
-    <button class="hotkey-btn" id="hotkeyBtn">⌘⇧D</button>
-  </div>
+    <div class="row">
+      <span class="row-label">Glow</span>
+      <label class="toggle">
+        <input type="checkbox" id="glowToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
 
-  <div class="seg-row">
-    <div class="seg-label">Corner zone</div>
-    <div class="seg" id="cornerZone">
-      <button data-value="60">Small</button>
-      <button data-value="100" class="active">Medium</button>
-      <button data-value="150">Large</button>
+    <div class="color-row" id="colorRow">
+      <div class="color-label">Glow color</div>
+      <div class="color-picker" id="colorPicker">
+        <div class="color-dot active" data-color="purple"></div>
+        <div class="color-dot" data-color="blue"></div>
+        <div class="color-dot" data-color="red"></div>
+        <div class="color-dot" data-color="green"></div>
+        <div class="color-dot" data-color="rainbow"></div>
+      </div>
+    </div>
+
+    <div class="hotkey-row">
+      <span class="row-label">Toggle hotkey</span>
+      <button class="hotkey-btn" id="hotkeyBtn">&#8984;&#8679;D</button>
+    </div>
+
+    <div class="seg-row">
+      <div class="seg-label">Corner zone</div>
+      <div class="seg" id="cornerZone">
+        <button data-value="60">Small</button>
+        <button data-value="100" class="active">Medium</button>
+        <button data-value="150">Large</button>
+      </div>
     </div>
   </div>
 
   <div class="status" id="daemonStatus"><span class="dot"></span><span class="label">Connecting...</span></div>
 
+  <script src="icons.js"></script>
+  <script>
+    // Inject game icons
+    document.querySelectorAll('.game-card[data-icon]').forEach(card => {
+      const key = card.getAttribute('data-icon');
+      const iconEl = card.querySelector('.game-icon');
+      if (GAME_ICONS[key] && iconEl) iconEl.innerHTML = GAME_ICONS[key];
+    });
+    // Settings toggle
+    const settingsToggle = document.getElementById('settingsToggle');
+    const settingsPanel = document.getElementById('settingsPanel');
+    settingsToggle.addEventListener('click', () => {
+      settingsToggle.classList.toggle('open');
+      settingsPanel.classList.toggle('open');
+    });
+  </script>
   <script src="popup.js"></script>
 </body>
 </html>

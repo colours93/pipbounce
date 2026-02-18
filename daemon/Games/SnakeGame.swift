@@ -7,8 +7,8 @@ class SnakeGame: GameBase {
 
     // Movement
     private let baseSpeed: CGFloat = 200.0
-    private let speedPerFood: CGFloat = 10.0
-    private let maxSpeed: CGFloat = 340.0
+    private let speedPerFood: CGFloat = 6.0
+    private let maxSpeed: CGFloat = 420.0
     private var currentSpeed: CGFloat = 200.0
     private var currentAngle: CGFloat = 0
     private let maxTurnRate: CGFloat = 6.0  // rad/s
@@ -137,21 +137,28 @@ class SnakeGame: GameBase {
 
     // MARK: - Coordinate conversion
 
+    private func wrap(_ val: CGFloat, _ max: CGFloat) -> CGFloat {
+        let v = val.truncatingRemainder(dividingBy: max)
+        return v < 0 ? v + max : v
+    }
+
+    /// Shortest signed delta on a wrapping axis (result in -max/2...max/2)
+    private func wrapDelta(_ a: CGFloat, _ b: CGFloat, _ wMax: CGFloat) -> CGFloat {
+        var d = a - b
+        if d > wMax / 2 { d -= wMax }
+        if d < -wMax / 2 { d += wMax }
+        return d
+    }
+
+    /// Wrap-aware world-to-screen: positions objects relative to camera across world boundaries
     private func worldToScreen(_ wx: CGFloat, _ wy: CGFloat) -> CGPoint {
-        CGPoint(x: wx - cameraX + savedScreen.minX,
-                y: wy - cameraY + savedScreen.minY)
+        CGPoint(x: wrapDelta(wx, cameraX, worldW) + savedScreen.minX,
+                y: wrapDelta(wy, cameraY, worldH) + savedScreen.minY)
     }
 
     private func screenToWorld(_ sx: CGFloat, _ sy: CGFloat) -> CGPoint {
         CGPoint(x: sx + cameraX - savedScreen.minX,
                 y: sy + cameraY - savedScreen.minY)
-    }
-
-    private func wrap(_ val: CGFloat, _ max: CGFloat) -> CGFloat {
-        var v = val
-        while v < 0 { v += max }
-        while v >= max { v -= max }
-        return v
     }
 
     // MARK: - GameBase Hooks
@@ -161,6 +168,7 @@ class SnakeGame: GameBase {
         distanceSamples = []
         distanceAccum = 0
         tailSegments = []
+        lastSpriteCount = 0
         currentSpeed = baseSpeed
         wasMouseDown = false
         boostUntilMach = 0
@@ -250,8 +258,8 @@ class SnakeGame: GameBase {
 
         let headCenterX = headPos.x + size.width / 2
         let headCenterY = headPos.y + size.height / 2
-        let dx = mouseWorld.x - headCenterX
-        let dy = mouseWorld.y - headCenterY
+        let dx = wrapDelta(mouseWorld.x, headCenterX, worldW)
+        let dy = wrapDelta(mouseWorld.y, headCenterY, worldH)
         let dist = sqrt(dx * dx + dy * dy)
 
         if dist > 2.0 {
@@ -271,10 +279,16 @@ class SnakeGame: GameBase {
         headPos.x += cos(currentAngle) * effectiveSpeed * dt
         headPos.y += sin(currentAngle) * effectiveSpeed * dt
 
-        // Distance-based sampling
+        // Compute travel distance before wrapping (small, correct values)
         let travelDx = headPos.x - prevHead.x
         let travelDy = headPos.y - prevHead.y
         distanceAccum += sqrt(travelDx * travelDx + travelDy * travelDy)
+
+        // World wrapping (wrap, no bounce)
+        headPos.x = wrap(headPos.x + size.width / 2, worldW) - size.width / 2
+        headPos.y = wrap(headPos.y + size.height / 2, worldH) - size.height / 2
+
+        // Distance-based sampling (after wrap so samples use wrapped coords)
         while distanceAccum >= sampleDistance {
             distanceAccum -= sampleDistance
             distanceSamples.append(headPos)
@@ -285,14 +299,12 @@ class SnakeGame: GameBase {
             distanceSamples.removeFirst(distanceSamples.count - maxNeeded)
         }
 
-        // World wrapping (wrap, no bounce)
-        headPos.x = wrap(headPos.x + size.width / 2, worldW) - size.width / 2
-        headPos.y = wrap(headPos.y + size.height / 2, worldH) - size.height / 2
-
-        // Food collision (world coords)
-        let headRect = CGRect(origin: headPos, size: size)
-        let foodRect = CGRect(x: foodPos.x, y: foodPos.y, width: foodSize, height: foodSize)
-        if headRect.intersects(foodRect) {
+        // Food collision (wrap-aware)
+        let foodDx = wrapDelta(foodPos.x + foodSize / 2, headPos.x + size.width / 2, worldW)
+        let foodDy = wrapDelta(foodPos.y + foodSize / 2, headPos.y + size.height / 2, worldH)
+        let foodCollisionDist = max(abs(foodDx) - (size.width + foodSize) / 2,
+                                     abs(foodDy) - (size.height + foodSize) / 2)
+        if foodCollisionDist < 0 {
             let eatPos = foodPos
             score += 1
             currentSpeed = min(baseSpeed + speedPerFood * CGFloat(score), maxSpeed)
@@ -301,33 +313,36 @@ class SnakeGame: GameBase {
             emitFoodParticles(at: eatPos)
         }
 
-        // Self collision (head vs tail)
+        // Self collision (head vs tail, wrap-aware)
+        let headCX = headPos.x + size.width / 2
+        let headCY = headPos.y + size.height / 2
         for i in 0..<tailSegments.count {
             let historyIndex = (i + 1) * segmentSpacingSamples
             if historyIndex >= distanceSamples.count { break }
             let segIdx = distanceSamples.count - 1 - historyIndex
-            if segIdx < 0 { break }
             let segPos = distanceSamples[segIdx]
             let segCX = segPos.x + cachedPipSize.width / 2
             let segCY = segPos.y + cachedPipSize.height / 2
             let t = segScaleForIndex(i)
             let sz = segmentSize * t
             let inset: CGFloat = 4
-            let segRect = CGRect(x: segCX - sz / 2 + inset,
-                                 y: segCY - sz / 2 + inset,
-                                 width: sz - inset * 2,
-                                 height: sz - inset * 2)
-            if headRect.insetBy(dx: 4, dy: 4).intersects(segRect) {
+            let colDx = abs(wrapDelta(segCX, headCX, worldW))
+            let colDy = abs(wrapDelta(segCY, headCY, worldH))
+            let halfW = (size.width / 2 - 4) + (sz / 2 - inset)
+            let halfH = (size.height / 2 - 4) + (sz / 2 - inset)
+            if colDx < halfW && colDy < halfH {
                 triggerSnakeGameOver()
                 return
             }
         }
 
-        // Update camera
+        // Update camera (wrap-aware lerp)
         let targetCamX = headPos.x + size.width / 2 - screen.width / 2
         let targetCamY = headPos.y + size.height / 2 - screen.height / 2
-        cameraX += (targetCamX - cameraX) * cameraLerp
-        cameraY += (targetCamY - cameraY) * cameraLerp
+        cameraX += wrapDelta(targetCamX, cameraX, worldW) * cameraLerp
+        cameraY += wrapDelta(targetCamY, cameraY, worldH) * cameraLerp
+        cameraX = wrap(cameraX, worldW)
+        cameraY = wrap(cameraY, worldH)
 
         // Move PiP
         let headScreen = worldToScreen(headPos.x, headPos.y)
@@ -403,14 +418,20 @@ class SnakeGame: GameBase {
         tailSegments.append(w)
     }
 
+    private var lastSpriteCount = 0
+
     private func updateTailPositions() {
+        // Only reassign sprites when segment count changes
+        let needSpriteUpdate = !gameOver && tailSegments.count != lastSpriteCount
+        if needSpriteUpdate { lastSpriteCount = tailSegments.count }
+
         for i in 0..<tailSegments.count {
             let historyIndex = (i + 1) * segmentSpacingSamples
             let scale = segScaleForIndex(i)
             let sz = segmentSize * scale
             let seg = tailSegments[i]
 
-            if !gameOver {
+            if needSpriteUpdate {
                 seg.contentView?.layer?.contents = spriteForSegmentIndex(i)
             }
 
@@ -419,20 +440,15 @@ class SnakeGame: GameBase {
                 continue
             }
             let segIdx = distanceSamples.count - 1 - historyIndex
-            if segIdx < 0 {
-                seg.setFrameOrigin(NSPoint(x: -100, y: screenH + 100))
-                continue
-            }
-            // World position of this segment
+
+            // World position of this segment (wrap-aware screen conversion)
             let worldPos = distanceSamples[segIdx]
             let worldCX = worldPos.x + cachedPipSize.width / 2
             let worldCY = worldPos.y + cachedPipSize.height / 2
 
-            // Convert to screen
             let sp = worldToScreen(worldCX - sz / 2, worldCY - sz / 2)
             let nsY = screenH - sp.y - sz
             seg.setFrame(NSRect(x: sp.x, y: nsY, width: sz, height: sz), display: false)
-            seg.contentView?.layer?.magnificationFilter = .nearest
         }
     }
 
@@ -472,19 +488,17 @@ class SnakeGame: GameBase {
         cell2.color = NSColor(red: 0.1, green: 0.9, blue: 0.3, alpha: 1.0).cgColor
         cell2.contents = makeCircleImage(size: 12, color: .white)
 
+        cell.birthRate = 30
+        cell2.birthRate = 30
         emitter.emitterCells = [cell, cell2]
+        emitter.beginTime = CACurrentMediaTime()
         pw.contentView!.layer!.addSublayer(emitter)
 
-        // Fire burst
-        emitter.beginTime = CACurrentMediaTime()
-        cell.birthRate = 5
-        cell2.birthRate = 5
-
-        // Stop after one frame, remove after lifetime
+        // Stop emission after short burst by setting lifetime to 0 (scales cell lifetimes to 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            cell.birthRate = 0
-            cell2.birthRate = 0
+            emitter.lifetime = 0  // prevents new particles, existing ones finish naturally
         }
+        // Remove layer after all particles have faded
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             emitter.removeFromSuperlayer()
         }
@@ -507,7 +521,7 @@ class SnakeGame: GameBase {
 
     private func spawnFood() {
         let margin: CGFloat = 40
-        for _ in 0..<10 {
+        for _ in 0..<50 {
             let x = CGFloat.random(in: margin...(worldW - margin - foodSize))
             let y = CGFloat.random(in: margin...(worldH - margin - foodSize))
             let candidate = CGRect(x: x, y: y, width: foodSize, height: foodSize)
@@ -520,7 +534,6 @@ class SnakeGame: GameBase {
                 let historyIndex = (i + 1) * segmentSpacingSamples
                 if historyIndex >= distanceSamples.count { break }
                 let segIdx = distanceSamples.count - 1 - historyIndex
-                if segIdx < 0 { break }
                 let segPos = distanceSamples[segIdx]
                 let segCX = segPos.x + cachedPipSize.width / 2
                 let segCY = segPos.y + cachedPipSize.height / 2

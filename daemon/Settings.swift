@@ -9,6 +9,41 @@ class Settings {
     var glowColor = "purple"         // purple, blue, red, green, rainbow
     var hotkeyCode: UInt16 = 2       // "d" key
     var hotkeyFlags: UInt32 = 0x108  // cmd+shift
+
+    private static let filePath: String = {
+        let dir = NSString("~/.pipbounce").expandingTildeInPath
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return (dir as NSString).appendingPathComponent("settings.json")
+    }()
+
+    func load() {
+        guard let data = FileManager.default.contents(atPath: Self.filePath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        if let v = json["enabled"] as? Bool { enabled = v }
+        if let v = json["cooldown"] as? Double { cooldown = v }
+        if let v = json["margin"] as? Double { margin = CGFloat(v) }
+        if let v = json["cornerSize"] as? Double { cornerSize = CGFloat(v) }
+        if let v = json["glow"] as? Bool { glow = v }
+        if let v = json["glowColor"] as? String { glowColor = v }
+        if let v = json["hotkeyCode"] as? Int { hotkeyCode = UInt16(v) }
+        if let v = json["hotkeyFlags"] as? Int { hotkeyFlags = UInt32(v) }
+        print("Settings loaded from \(Self.filePath)")
+    }
+
+    func save() {
+        let dict: [String: Any] = [
+            "enabled": enabled,
+            "cooldown": cooldown,
+            "margin": Double(margin),
+            "cornerSize": Double(cornerSize),
+            "glow": glow,
+            "glowColor": glowColor,
+            "hotkeyCode": Int(hotkeyCode),
+            "hotkeyFlags": Int(hotkeyFlags),
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: .prettyPrinted) else { return }
+        try? data.write(to: URL(fileURLWithPath: Self.filePath))
+    }
 }
 
 let settings = Settings()

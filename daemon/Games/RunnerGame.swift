@@ -224,7 +224,7 @@ class RunnerGame: GameBase {
         // Gap tightening based on score
         let minGapExtra: CGFloat = 30
         let maxGapExtra: CGFloat = 80
-        let tightenProgress = min(CGFloat(score) / 40.0, 1.0)
+        let tightenProgress = min(CGFloat(score) / 30.0, 1.0)
         let currentGapExtra = maxGapExtra - (maxGapExtra - minGapExtra) * tightenProgress
 
         CATransaction.begin()
@@ -311,7 +311,7 @@ class RunnerGame: GameBase {
                 if obstaclesPassed % 10 == 0 {
                     zone += 1
                     zonePauseTimer = 0.5
-                    zoneFlashTimer = 0.4
+                    zoneFlashTimer = 0.8
                     // Update existing obstacle tiles
                     let newTile = Sprites.tileForZone(zone)
                     for o in obstacles {
@@ -469,7 +469,7 @@ class RunnerGame: GameBase {
             NSColor.orange.cgColor,
         ]
 
-        let count = Int.random(in: 6...8)
+        let count = Int.random(in: 10...14)
         for _ in 0..<count {
             let fromTop = topClose && (!bottomClose || Bool.random())
             let py = fromTop ? gapY : gapBottom
@@ -502,14 +502,14 @@ class RunnerGame: GameBase {
             particles[i].life -= dt
             particles[i].x += particles[i].vx * dt
             particles[i].y += particles[i].vy * dt
-            let alpha = max(0, particles[i].life / 0.2)
+            let alpha = max(0, particles[i].life / 0.35)
             particles[i].layer.opacity = Float(alpha)
             particles[i].layer.position = CGPoint(x: particles[i].x, y: particles[i].y)
         }
     }
 
     private func doTriggerGameOver(now: UInt64) {
-        gameOverFlashTimer = 0.1
+        gameOverFlashTimer = 0.25
         triggerGameOver(message: "GAME OVER \(score)")
         scoreLabel?.font = NSFont.monospacedSystemFont(ofSize: 20, weight: .bold)
 

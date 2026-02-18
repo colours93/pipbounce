@@ -124,7 +124,8 @@ els.pipBtn.addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 
 const games = [
-  { id: "pongBtn", key: "pong", label: "Pong in Picture", stopLabel: "Stop PiP Pong" },
+  { id: "pipongBtn", key: "pipong", label: "PiPong", stopLabel: "Stop PiPong" },
+  { id: "pipong2Btn", key: "pipong2", label: "PiPong 2", stopLabel: "Stop PiPong 2" },
   { id: "flappyBtn", key: "flappy", label: "FlaPiPy Bird", stopLabel: "Stop FlaPiPy" },
   { id: "bounceBtn", key: "bounce", statusKey: "bounceAuto", label: "Bounce", stopLabel: "Stop Bounce" },
   { id: "bouncePaddleBtn", key: "bounce-paddle", statusKey: "bouncePaddle", label: "Bounce Paddle", stopLabel: "Stop Paddle" },
@@ -174,13 +175,17 @@ for (const game of games) {
     try {
       const res = await fetch(`${API}/${game.key}`, { method: "POST" });
       const data = await res.json();
-      const isRunning = !!data[game.statusKey || game.key];
-      el.querySelector(".game-label").textContent = isRunning
-        ? game.stopLabel
-        : game.label;
-      el.classList.toggle("active", isRunning);
-      if (isRunning) resetGameButtons(game.key);
-    } catch {}
+      if (data && typeof data === "object") {
+        const isRunning = !!data[game.statusKey || game.key];
+        el.querySelector(".game-label").textContent = isRunning
+          ? game.stopLabel
+          : game.label;
+        el.classList.toggle("active", isRunning);
+        if (isRunning) resetGameButtons(game.key);
+      }
+    } catch (e) {
+      console.error(`Game toggle failed (${game.key}):`, e);
+    }
   });
 }
 
@@ -193,7 +198,9 @@ els.status.addEventListener("click", async () => {
     els.statusLabel.textContent = "Restarting...";
     try {
       await fetch(`${API}/restart`, { method: "POST" });
-    } catch {}
+    } catch (e) {
+      console.error("Restart request failed:", e);
+    }
     await new Promise((r) => setTimeout(r, 800));
     fetchStatus();
   }
@@ -223,7 +230,9 @@ async function updateSettings(changes) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     });
-  } catch {}
+  } catch (e) {
+    console.error("Settings update failed:", e);
+  }
 }
 
 els.toggle.addEventListener("change", () => {
@@ -338,8 +347,11 @@ async function fetchStatus() {
   try {
     const res = await fetch(`${API}/status`);
     const data = await res.json();
+    if (!data || typeof data !== "object" || data.enabled === undefined) {
+      throw new Error("Invalid status response");
+    }
 
-    pipIsActive = data.pipActive;
+    pipIsActive = !!data.pipActive;
     updatePipButton();
 
     els.statusLabel.textContent = data.pipActive ? "PiP active" : "Online";

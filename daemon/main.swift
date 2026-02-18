@@ -32,6 +32,7 @@ killExisting()
 writePid()
 
 let app = NSApplication.shared
+settings.load()
 let server = ControlServer()
 server.start()
 let daemon = PipBounceDaemon()

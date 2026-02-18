@@ -640,7 +640,7 @@ class BreakoutGame: GameBase {
         launched = false
         velocity = .zero
 
-        paddleW = max(80, basePaddleW - CGFloat(level) * 20)
+        paddleW = max(60, basePaddleW - CGFloat(level) * 15)
 
         if let rootLayer = overlayLayer {
             buildBricks(rootLayer: rootLayer, screen: getScreenFrame())

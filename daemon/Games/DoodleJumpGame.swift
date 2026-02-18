@@ -8,9 +8,9 @@ class DoodleJumpGame: GameBase {
     // Physics
     private var position = CGPoint.zero   // AX coords (y-down)
     private var velocityY: CGFloat = 0    // positive = downward in AX
-    private let gravity: CGFloat = 900
-    private let bounceImpulse: CGFloat = -520
-    private let strongBounce: CGFloat = -620
+    private let gravity: CGFloat = 750
+    private let bounceImpulse: CGFloat = -500
+    private let strongBounce: CGFloat = -600
 
     // Camera
     private var cameraY: CGFloat = 0      // AX y of the top of visible area
@@ -274,7 +274,7 @@ class DoodleJumpGame: GameBase {
         guard let rootLayer = overlayLayer else { return }
 
         let baseSpacing = cachedPipSize.height * 0.8
-        let spacing = min(baseSpacing + CGFloat(score) * 0.3, baseSpacing * 2.0)
+        let spacing = min(baseSpacing + CGFloat(score) * 0.25, baseSpacing * 1.6)
         nextPlatformY -= spacing
 
         let isMoving = score > 15 && CGFloat.random(in: 0...1) < 0.3

@@ -89,7 +89,8 @@ class ControlServer {
                 + "\"glowColor\":\"\(settings.glowColor)\","
                 + "\"hotkeyCode\":\(settings.hotkeyCode),"
                 + "\"hotkeyFlags\":\(settings.hotkeyFlags),"
-                + "\"pong\":\(pong.active),"
+                + "\"pipong\":\(pipong.active),"
+                + "\"pipong2\":\(pipong2.active),"
                 + "\"flappy\":\(flappy.active),"
                 + "\"bounce\":\(bounce.active),"
                 + "\"bounceAuto\":\(bounce.active && !bounce.paddleMode),"
@@ -120,14 +121,24 @@ class ControlServer {
             return "{\"restarting\":true}"
         }
 
-        if firstLine.contains("POST /pong") {
+        if firstLine.contains("POST /pipong2") {
             let sema = DispatchSemaphore(value: 0)
             DispatchQueue.main.async {
-                daemon.toggleGame(pong)
+                daemon.toggleGame(pipong2)
                 sema.signal()
             }
             sema.wait()
-            return "{\"pong\":\(pong.active)}"
+            return "{\"pipong2\":\(pipong2.active)}"
+        }
+
+        if firstLine.contains("POST /pipong") {
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                daemon.toggleGame(pipong)
+                sema.signal()
+            }
+            sema.wait()
+            return "{\"pipong\":\(pipong.active)}"
         }
 
         if firstLine.contains("POST /flappy") {
@@ -255,6 +266,7 @@ class ControlServer {
         if let hk = json["hotkeyCode"] as? Int { settings.hotkeyCode = UInt16(hk) }
         if let hf = json["hotkeyFlags"] as? Int { settings.hotkeyFlags = UInt32(hf) }
 
+        settings.save()
         print("Settings updated: cooldown=\(settings.cooldown)"
               + " margin=\(Int(settings.margin))"
               + " cornerSize=\(Int(settings.cornerSize))"

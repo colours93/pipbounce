@@ -30,23 +30,17 @@ func findPipWindow() -> PipWindowInfo? {
             || ($0.bundleIdentifier ?? "").contains("chrome")
     }
 
-    if chromeApps.isEmpty {
-        print("[PiP] No Chrome apps found")
-    }
+    if chromeApps.isEmpty { return nil }
 
     let floating = floatingWindowRects()
-    print("[PiP] Chrome apps: \(chromeApps.count), floating rects: \(floating.count)")
 
     for app in chromeApps {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var windowsRef: CFTypeRef?
-        let axErr = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
-        guard axErr == .success, let windows = windowsRef as? [AXUIElement] else {
-            print("[PiP] AX windows failed for \(app.localizedName ?? "?") (err=\(axErr.rawValue))")
+        guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+              let windows = windowsRef as? [AXUIElement] else {
             continue
         }
-
-        print("[PiP] \(app.localizedName ?? "?"): \(windows.count) windows")
 
         for window in windows {
             if let info = extractPipInfo(from: window, floating: floating) {
@@ -75,9 +69,8 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
     AXValueGetValue(posRef as! AXValue, .cgPoint, &pos)
     AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
 
-    let titleLower = title.lowercased()
-    let isPip = titleLower.contains("picture in picture")
-        || titleLower.contains("picture-in-picture")
+    let isPip = title.localizedCaseInsensitiveContains("picture in picture")
+        || title.localizedCaseInsensitiveContains("picture-in-picture")
 
     // Document PiP: untitled, landscape, AND confirmed floating (above normal window level).
     // The floating check prevents matching Chrome popups like the omnibox dropdown.
@@ -127,8 +120,6 @@ private func extractPipInfo(from window: AXUIElement, floating: [CGRect]) -> Pip
     // also contains this string) by requiring it to be in the floating layer.
     // Chrome PiP windows are always above normal window level (layer > 0).
     let isTitledPip = isPip && matchesFloat
-
-    print("[PiP]   window: title='\(title.prefix(60))' size=\(Int(size.width))x\(Int(size.height)) isPip=\(isPip) float=\(matchesFloat) min=\(hasMinimize) close=\(hasClose) role=\(role)/\(subrole) titled=\(isTitledPip) docPip=\(isDocPip)")
 
     guard isTitledPip || isDocPip else { return nil }
 

@@ -50,7 +50,10 @@ class RGBBorder {
 
     /// rect is in AX coordinates (origin top-left, Y down).
     func show(around rect: CGRect) {
-        let screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
+        // AX coords use the primary screen's height for conversion.
+        // NSScreen.screens[0] is always the primary display; NSScreen.main
+        // follows keyboard focus and would break on multi-monitor setups.
+        let screenH = NSScreen.screens[0].frame.height
         let pad = rotationPadding
 
         // Convert AX coords -> NSWindow frame (origin bottom-left, Y up)
@@ -66,7 +69,8 @@ class RGBBorder {
                              backing: .buffered, defer: false)
             w.isOpaque = false
             w.backgroundColor = .clear
-            w.level = .floating
+            // One level above .floating so Chrome can't reorder PiP in front
+            w.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
             w.ignoresMouseEvents = true
             w.hasShadow = false
             w.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
@@ -103,11 +107,12 @@ class RGBBorder {
             gradientLayer.colors = Self.colorSets[color] ?? Self.colorSets["rainbow"]!
         }
 
-        window?.setFrame(nsFrame, display: true)
-
-        // Disable implicit CoreAnimation transitions -- all updates must be instant
+        // Batch setFrame + layer updates inside one CATransaction to prevent
+        // implicit animations and ensure the window and layers move together.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+
+        window?.setFrame(nsFrame, display: true)
 
         let viewSize = nsFrame.size
         window?.contentView?.subviews.first?.frame = NSRect(origin: .zero, size: viewSize)

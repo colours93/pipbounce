@@ -1,19 +1,17 @@
 import Cocoa
 import ApplicationServices
 
-let pipong2 = PiPong2Game()
+let pipong = PiPongGame()
 
-class PiPong2Game: GameBase {
+/// PiPong — classic mode where the PiP window IS the ball.
+/// Both paddles are overlay windows. Player controls left paddle with mouse Y.
+class PiPongGame: GameBase {
 
     private var velocity = CGPoint.zero
     private let baseSpeed: CGFloat = 420.0
     private let maxSpeed: CGFloat = 900.0
 
-    // Ball is now a separate window (PiP = player paddle)
-    private var ballWindow: NSWindow?
-    private let ballSize: CGFloat = 16
-    private var ballPos = CGPoint.zero
-
+    private var playerPaddle: NSWindow?
     private var aiPaddle: NSWindow?
 
     private let paddleWidth: CGFloat = 8
@@ -22,11 +20,15 @@ class PiPong2Game: GameBase {
 
     private var playerScore = 0
     private var aiScore = 0
+    private var playerY: CGFloat = 0
     private var aiY: CGFloat = 0
     private let aiSpeed: CGFloat = 300.0
 
     private var pauseUntil: UInt64 = 0
     private var scoreChanged = false
+
+    // Ball position (= PiP position, in screen coords)
+    private var ballPos = CGPoint.zero
 
     // AI reaction delay
     private var aiTargetY: CGFloat = 0
@@ -43,7 +45,7 @@ class PiPong2Game: GameBase {
     private var rallyStartMach: UInt64 = 0
     private let speedRampDuration: CGFloat = 15.0
 
-    // Ball trail (manual position history)
+    // Ball trail
     private var trailWindow: NSWindow?
     private var trailLayers: [CALayer] = []
     private var trailPositions: [CGPoint] = []
@@ -53,10 +55,6 @@ class PiPong2Game: GameBase {
     // Screen shake
     private var shakeFramesRemaining = 0
 
-    // PiP paddle position
-    private var pipPaddleY: CGFloat = 0
-
-
     override func onStart(screen: CGRect, pip: PipWindowInfo) {
         timerIntervalMs = 8
 
@@ -64,6 +62,7 @@ class PiPong2Game: GameBase {
         aiScore = 0
         scoreChanged = false
         paddleHeight = screen.height * 0.15
+        playerY = screen.midY - paddleHeight / 2
         aiY = screen.midY - paddleHeight / 2
         aiTargetY = aiY
         aiTargetNoise = 0
@@ -76,9 +75,11 @@ class PiPong2Game: GameBase {
         trailPositions = []
         trailFrameCounter = 0
         shakeFramesRemaining = 0
-        pipPaddleY = screen.midY - cachedPipSize.height / 2
 
-        ballPos = CGPoint(x: screen.midX - ballSize / 2, y: screen.midY - ballSize / 2)
+        // PiP IS the ball — start at center
+        ballPos = CGPoint(x: screen.midX - cachedPipSize.width / 2,
+                          y: screen.midY - cachedPipSize.height / 2)
+        movePip(to: ballPos)
 
         launchBall(direction: Bool.random() ? 1 : -1)
 
@@ -88,30 +89,24 @@ class PiPong2Game: GameBase {
             DispatchQueue.main.sync { self.createOverlays(screen: screen) }
         }
 
-        // Position PiP as left paddle immediately
-        let pipX = screen.minX + paddleMargin
-        movePip(to: CGPoint(x: pipX, y: pipPaddleY))
-
-        print("Pong started")
+        print("PiPong started")
     }
 
     override func onStop() {
-        ballPos = .zero
-
-        let bw = ballWindow, aw = aiPaddle, tw = trailWindow
+        let pp = playerPaddle, ap = aiPaddle, tw = trailWindow
         let cleanup = {
-            bw?.orderOut(nil)
-            aw?.orderOut(nil)
+            pp?.orderOut(nil)
+            ap?.orderOut(nil)
             tw?.orderOut(nil)
         }
         if Thread.isMainThread { cleanup() }
         else { DispatchQueue.main.async { cleanup() } }
-        ballWindow = nil
+        playerPaddle = nil
         aiPaddle = nil
         trailWindow = nil
         trailLayers = []
         trailPositions = []
-        print("Pong stopped")
+        print("PiPong stopped")
     }
 
     override func gameTick() {
@@ -125,11 +120,8 @@ class PiPong2Game: GameBase {
         let dt = deltaTime()
         let now = mach_absolute_time()
 
-        let pipX = screen.minX + paddleMargin
-
-        // Move PiP (player paddle) to track mouse Y
-        pipPaddleY = max(screen.minY, min(screen.maxY - cachedPipSize.height, mousePos.y - cachedPipSize.height / 2))
-        if !movePip(to: CGPoint(x: pipX, y: pipPaddleY)) { return }
+        // Player paddle tracks mouse Y
+        playerY = max(screen.minY, min(screen.maxY - paddleHeight, mousePos.y - paddleHeight / 2))
 
         // Match over pause
         if matchOverUntil > 0 {
@@ -137,7 +129,7 @@ class PiPong2Game: GameBase {
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 updateOverlayPositions(screen: screen)
-                let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
+                let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
                 syncBorder(around: pipBounds)
                 CATransaction.commit()
                 return
@@ -154,7 +146,7 @@ class PiPong2Game: GameBase {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             updateOverlayPositions(screen: screen)
-            let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
+            let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
             syncBorder(around: pipBounds)
             if scoreChanged { updateScore(); scoreChanged = false }
             CATransaction.commit()
@@ -163,7 +155,7 @@ class PiPong2Game: GameBase {
             rallyStartMach = now
         }
 
-        // Speed ramp: linearly from baseSpeed to maxSpeed over speedRampDuration
+        // Speed ramp
         let rallyTime = machToSeconds(now - rallyStartMach)
         let speedT = min(rallyTime / speedRampDuration, 1.0)
         let currentSpeed = baseSpeed + (maxSpeed - baseSpeed) * speedT
@@ -176,7 +168,7 @@ class PiPong2Game: GameBase {
             velocity.y *= s
         }
 
-        // Ball physics
+        // Ball physics (PiP moves)
         ballPos.x += velocity.x * dt
         ballPos.y += velocity.y * dt
 
@@ -185,8 +177,8 @@ class PiPong2Game: GameBase {
             ballPos.y = screen.minY
             velocity.y = abs(velocity.y)
         }
-        if ballPos.y + ballSize >= screen.maxY {
-            ballPos.y = screen.maxY - ballSize
+        if ballPos.y + cachedPipSize.height >= screen.maxY {
+            ballPos.y = screen.maxY - cachedPipSize.height
             velocity.y = -abs(velocity.y)
         }
 
@@ -199,10 +191,10 @@ class PiPong2Game: GameBase {
         }
 
         // AI with reaction delay and noise
-        let ballCY = ballPos.y + ballSize / 2
+        let ballCY = ballPos.y + cachedPipSize.height / 2
         let midX = screen.midX
 
-        if velocity.x > 0 && ballPos.x + ballSize > midX {
+        if velocity.x > 0 && ballPos.x + cachedPipSize.width > midX {
             if now - aiLastUpdateMach > secondsToMach(aiReactionDelay) {
                 aiLastUpdateMach = now
                 let noiseMag = aiNoiseAmount()
@@ -220,41 +212,42 @@ class PiPong2Game: GameBase {
         aiY += max(-aiSpeed * dt, min(aiSpeed * dt, aiDiff))
         aiY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
 
+        let playerX = screen.minX + paddleMargin
         let aiX = screen.maxX - paddleMargin - paddleWidth
 
-        // Player paddle collision (PiP = paddle)
+        // Player paddle collision
         let deflectScale = 150 + (currentSpeed / maxSpeed) * 100
-        let playerRight = pipX + cachedPipSize.width
-        if ballPos.x <= playerRight && ballPos.x + ballSize >= pipX && velocity.x < 0 {
-            if ballCY >= pipPaddleY && ballCY <= pipPaddleY + cachedPipSize.height {
+        let playerRight = playerX + paddleWidth
+        if ballPos.x <= playerRight && ballPos.x + cachedPipSize.width >= playerX && velocity.x < 0 {
+            if ballCY >= playerY && ballCY <= playerY + paddleHeight {
                 velocity.x = abs(velocity.x)
-                let hit = (ballCY - pipPaddleY) / cachedPipSize.height - 0.5
+                let hit = (ballCY - playerY) / paddleHeight - 0.5
                 velocity.y += hit * deflectScale
                 let s2 = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
                 if s2 > maxSpeed { let c = maxSpeed / s2; velocity.x *= c; velocity.y *= c }
                 ballPos.x = playerRight
-                flashPipBorder()
+                flashPaddle(playerPaddle)
             }
         }
 
         // AI paddle collision
-        if ballPos.x + ballSize >= aiX && ballPos.x + ballSize <= aiX + paddleWidth + ballSize / 2 && velocity.x > 0 {
+        if ballPos.x + cachedPipSize.width >= aiX && ballPos.x + cachedPipSize.width <= aiX + paddleWidth + cachedPipSize.width / 2 && velocity.x > 0 {
             if ballCY >= aiY && ballCY <= aiY + paddleHeight {
                 velocity.x = -(abs(velocity.x))
                 let hit = (ballCY - aiY) / paddleHeight - 0.5
                 velocity.y += hit * deflectScale
                 let s2 = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
                 if s2 > maxSpeed { let c = maxSpeed / s2; velocity.x *= c; velocity.y *= c }
-                ballPos.x = aiX - ballSize
+                ballPos.x = aiX - cachedPipSize.width
                 flashPaddle(aiPaddle)
             }
         }
 
         // Scoring
-        if ballPos.x + ballSize < screen.minX - 30 {
+        if ballPos.x + cachedPipSize.width < screen.minX - 30 {
             aiScore += 1
             scoreChanged = true
-            ballPos = CGPoint(x: screen.midX - ballSize / 2, y: screen.midY - ballSize / 2)
+            ballPos = CGPoint(x: screen.midX - cachedPipSize.width / 2, y: screen.midY - cachedPipSize.height / 2)
             launchBall(direction: 1)
             triggerShake()
             if checkMatchOver() { return }
@@ -265,7 +258,7 @@ class PiPong2Game: GameBase {
         if ballPos.x > screen.maxX + 30 {
             playerScore += 1
             scoreChanged = true
-            ballPos = CGPoint(x: screen.midX - ballSize / 2, y: screen.midY - ballSize / 2)
+            ballPos = CGPoint(x: screen.midX - cachedPipSize.width / 2, y: screen.midY - cachedPipSize.height / 2)
             launchBall(direction: -1)
             triggerShake()
             if checkMatchOver() { return }
@@ -273,13 +266,15 @@ class PiPong2Game: GameBase {
             rallyStartMach = 0
         }
 
-        // Border around PiP (player paddle)
-        let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
+        // Move PiP (the ball)
+        let shakeOff = applyShake()
+        let movedPos = CGPoint(x: ballPos.x + shakeOff.x, y: ballPos.y + shakeOff.y)
+        if !movePip(to: movedPos) { return }
+
+        let pipBounds = CGRect(origin: movedPos, size: cachedPipSize)
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-
-        let shakeOff = applyShake()
 
         updateOverlayPositions(screen: screen, shakeOffset: shakeOff)
         syncBorder(around: pipBounds)
@@ -292,11 +287,8 @@ class PiPong2Game: GameBase {
 
     private func aiNoiseAmount() -> CGFloat {
         let diff = playerScore - aiScore
-        if diff >= 3 {
-            return 5
-        } else if diff <= -3 {
-            return 40
-        }
+        if diff >= 3 { return 5 }
+        else if diff <= -3 { return 40 }
         return 20
     }
 
@@ -321,20 +313,11 @@ class PiPong2Game: GameBase {
 
     private func flashPaddle(_ paddle: NSWindow?) {
         guard let layer = paddle?.contentView?.layer else { return }
-        let glowColors = glowCGColor()
         let flash = CABasicAnimation(keyPath: "backgroundColor")
-        flash.fromValue = glowColors
+        flash.fromValue = glowCGColor()
         flash.toValue = NSColor.white.cgColor
         flash.duration = 0.1
         layer.add(flash, forKey: "hitFlash")
-    }
-
-    private func flashPipBorder() {
-        guard let border = borderRef else { return }
-        // Briefly pulse the border brighter on hit
-        let pipBounds = CGRect(x: lastBounds.origin.x, y: lastBounds.origin.y,
-                               width: cachedPipSize.width, height: cachedPipSize.height)
-        border.show(around: pipBounds)
     }
 
     private func glowCGColor() -> CGColor {
@@ -372,14 +355,14 @@ class PiPong2Game: GameBase {
         trailFrameCounter += 1
         if trailFrameCounter >= 2 {
             trailFrameCounter = 0
-            trailPositions.insert(CGPoint(x: ballPos.x + ballSize / 2,
-                                           y: ballPos.y + ballSize / 2), at: 0)
+            trailPositions.insert(CGPoint(x: ballPos.x + cachedPipSize.width / 2,
+                                           y: ballPos.y + cachedPipSize.height / 2), at: 0)
             if trailPositions.count > trailCount + 2 {
                 trailPositions.removeLast()
             }
         }
 
-        let dotSize: CGFloat = ballSize * 0.8
+        let dotSize: CGFloat = min(cachedPipSize.width, cachedPipSize.height) * 0.4
         let color = glowCGColor()
 
         for i in 0..<trailLayers.count {
@@ -407,28 +390,17 @@ class PiPong2Game: GameBase {
     private func createOverlays(screen: CGRect) {
         let h = screenH
 
-        // AI paddle (right side) — still a white rectangle
+        // Player paddle (left side)
+        playerPaddle = makePaddleWindow(
+            nsFrame: NSRect(x: screen.minX + paddleMargin,
+                            y: h - screen.midY - paddleHeight / 2,
+                            width: paddleWidth, height: paddleHeight))
+
+        // AI paddle (right side)
         aiPaddle = makePaddleWindow(
             nsFrame: NSRect(x: screen.maxX - paddleMargin - paddleWidth,
                             y: h - screen.midY - paddleHeight / 2,
                             width: paddleWidth, height: paddleHeight))
-
-        // Ball window — small glowing square
-        let bw = NSWindow(contentRect: NSRect(x: screen.midX - ballSize / 2,
-                                              y: h - screen.midY - ballSize / 2,
-                                              width: ballSize, height: ballSize),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        bw.isOpaque = false
-        bw.backgroundColor = .clear
-        bw.level = .floating
-        bw.ignoresMouseEvents = true
-        bw.hasShadow = false
-        bw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-        bw.contentView!.wantsLayer = true
-        bw.contentView!.layer!.backgroundColor = NSColor.white.cgColor
-        bw.contentView!.layer!.cornerRadius = ballSize / 2
-        bw.orderFrontRegardless()
-        ballWindow = bw
 
         // Score overlay
         let scoreY = h - screen.minY - 55
@@ -507,14 +479,14 @@ class PiPong2Game: GameBase {
     private func updateOverlayPositions(screen: CGRect, shakeOffset: CGPoint = .zero) {
         let h = screenH
 
-        // Ball window position
-        if let bw = ballWindow {
-            bw.setFrame(NSRect(x: ballPos.x + shakeOffset.x,
-                               y: h - ballPos.y - ballSize + shakeOffset.y,
-                               width: ballSize, height: ballSize), display: true)
-        }
+        // Player paddle (left)
+        let pY = max(screen.minY, min(screen.maxY - paddleHeight, playerY))
+        playerPaddle?.setFrame(
+            NSRect(x: screen.minX + paddleMargin + shakeOffset.x,
+                   y: h - pY - paddleHeight + shakeOffset.y,
+                   width: paddleWidth, height: paddleHeight), display: true)
 
-        // AI paddle
+        // AI paddle (right)
         let aY = max(screen.minY, min(screen.maxY - paddleHeight, aiY))
         aiPaddle?.setFrame(
             NSRect(x: screen.maxX - paddleMargin - paddleWidth + shakeOffset.x,

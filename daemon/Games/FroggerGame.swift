@@ -14,7 +14,7 @@ class FroggerGame: GameBase {
     private var frogX: CGFloat = 0
     private var frogY: CGFloat = 0
     private var hopTarget: CGFloat? = nil
-    private let hopDuration: CGFloat = 0.15
+    private let hopDuration: CGFloat = 0.12
     private var hopElapsed: CGFloat = 0
     private var hopStart: CGFloat = 0
     private var hopDirection: Int = 1  // 1 = forward, -1 = backward
@@ -204,7 +204,7 @@ class FroggerGame: GameBase {
     private var cars: [Car] = []
     private let carHeight: CGFloat = 16
     private var baseCarSpeed: CGFloat = 120
-    private let speedIncrement: CGFloat = 15
+    private let speedIncrement: CGFloat = 20
 
     // Lives
     private var lives = 3
@@ -214,7 +214,7 @@ class FroggerGame: GameBase {
     private var deathShakeOriginX: CGFloat = 0
 
     // Near-miss
-    private let nearMissThreshold: CGFloat = 8
+    private let nearMissThreshold: CGFloat = 12
     private var nearMissPulseEnd: UInt64 = 0
 
     // Goal celebration
@@ -457,7 +457,7 @@ class FroggerGame: GameBase {
                 frogX = max(screen.minX, min(frogX, screen.maxX - size.width))
             } else {
                 // Horizontal shake
-                let shakeAmp: CGFloat = 8
+                let shakeAmp: CGFloat = 14
                 let freq: CGFloat = 30
                 frogX = deathShakeOriginX + sin(elapsed * freq) * shakeAmp
                 // Move PiP during shake
@@ -586,7 +586,11 @@ class FroggerGame: GameBase {
                 border.show(around: bounds)
                 settings.glowColor = saved
             } else if nearMissPulseEnd > now {
+                // Near-miss flash: bright yellow pulse
+                let saved = settings.glowColor
+                settings.glowColor = "yellow"
                 border.show(around: bounds)
+                settings.glowColor = saved
             } else {
                 border.show(around: bounds)
             }

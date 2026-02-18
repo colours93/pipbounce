@@ -9,7 +9,7 @@ class AsteroidsGame: GameBase {
     private var shipPos = CGPoint.zero
     private var shipVel = CGPoint.zero
     private let thrustAccel: CGFloat = 400
-    private let driftHalfLife: CGFloat = 0.5
+    private let driftHalfLife: CGFloat = 1.0
     private let maxSpeed: CGFloat = 500
 
     // Camera (world coordinates of viewport top-left)
@@ -71,7 +71,7 @@ class AsteroidsGame: GameBase {
     private var bullets: [Bullet] = []
     private let bulletSpeed: CGFloat = 600
     private let maxBullets = 5
-    private let bulletLifetime: Double = 2.0
+    private let bulletLifetime: Double = 1.2
 
     // Auto-fire
     private var lastShotMach: UInt64 = 0
@@ -405,7 +405,7 @@ class AsteroidsGame: GameBase {
         let expCell = CAEmitterCell()
         expCell.name = "explosion"
         expCell.contents = Self.makeCircleImage(diameter: 6, color: .green)
-        expCell.birthRate = 80
+        expCell.birthRate = 150
         expCell.lifetime = 0.4
         expCell.velocity = 180
         expCell.velocityRange = 80
@@ -520,7 +520,7 @@ class AsteroidsGame: GameBase {
             for _ in 0..<20 {
                 let dx = ax - (shipPos.x + cachedPipSize.width / 2)
                 let dy = ay - (shipPos.y + cachedPipSize.height / 2)
-                if sqrt(dx * dx + dy * dy) > 200 {
+                if sqrt(dx * dx + dy * dy) > 300 {
                     break
                 }
                 ax = CGFloat.random(in: 0...worldW)
@@ -924,7 +924,7 @@ class AsteroidsGame: GameBase {
             let speedMult: CGFloat = 1.4
             let baseVx = a.vx * speedMult
             let baseVy = a.vy * speedMult
-            let jitterAngle = CGFloat.random(in: -0.6...0.6)
+            let jitterAngle = CGFloat.random(in: -0.8...0.8)
             let cos_a = cos(jitterAngle)
             let sin_a = sin(jitterAngle)
             let nvx = baseVx * cos_a - baseVy * sin_a

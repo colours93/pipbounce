@@ -33,9 +33,10 @@ class PipBounceDaemon {
         installHotkey()
         print("pipbounce daemon started")
 
-        Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
+        let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
+        t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .microseconds(500))
+        t.setEventHandler { [weak self] in self?.tick() }
+        t.resume()
     }
 
     private func quickCheck(_ element: AXUIElement) -> PipWindowInfo? {
@@ -55,9 +56,7 @@ class PipBounceDaemon {
     }
 
     private func tick() {
-        // Pong and dodge animation have their own high-frequency timers.
-        // Bail immediately -- don't block main queue with expensive AX IPC.
-        if pong.active || flappy.active || bounce.active || invaders.active
+        if pipong.active || pipong2.active || flappy.active || bounce.active || invaders.active
             || frogger.active || runner.active || snake.active
             || breakout.active || asteroids.active || cursorhunt.active
             || doodlejump.active || pacman.active || animating { return }
@@ -175,7 +174,7 @@ class PipBounceDaemon {
     /// Toggle any MiniGame. Stops the current game if one is active.
     func toggleGame(_ game: MiniGame) {
         // Stop any running game first
-        let allGames: [MiniGame] = [pong, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids, cursorhunt, doodlejump, pacman]
+        let allGames: [MiniGame] = [pipong, pipong2, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids, cursorhunt, doodlejump, pacman]
         for g in allGames where g.active {
             g.stop()
             rgbBorder.tilt(0)

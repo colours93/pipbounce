@@ -12,7 +12,7 @@ class CursorHuntGame: GameBase {
     private let accelRamp: CGFloat = 40
     private var maxSpeed: CGFloat = 500
     private let maxSpeedCap: CGFloat = 1600
-    private let friction: CGFloat = 0.985
+    private let friction: CGFloat = 0.994
 
     // Scoring
     private var startMach: UInt64 = 0
@@ -64,9 +64,10 @@ class CursorHuntGame: GameBase {
         survivalTime = machToSeconds(now - startMach)
         scoreLabel?.stringValue = String(format: "%.1fs", survivalTime)
 
-        // Ramp difficulty
-        baseAccel = 400 + accelRamp * survivalTime
-        maxSpeed = min(500 + accelRamp * survivalTime, maxSpeedCap)
+        // Ramp difficulty — logarithmic curve so it keeps getting harder past 28s
+        let rampT = log(1 + survivalTime * 0.15) / log(1 + 30 * 0.15)  // normalized 0..~1 at 30s
+        baseAccel = 400 + 1200 * rampT
+        maxSpeed = min(500 + 1100 * rampT, maxSpeedCap)
 
         // Get mouse position
         guard let mousePos = mousePosition() else { return }
@@ -102,7 +103,7 @@ class CursorHuntGame: GameBase {
         position.y = max(screen.minY, min(position.y, screen.maxY - size.height))
 
         // Collision: cursor inside PiP
-        let pipRect = CGRect(origin: position, size: size).insetBy(dx: 8, dy: 8)
+        let pipRect = CGRect(origin: position, size: size).insetBy(dx: 4, dy: 4)
         if pipRect.contains(mousePos) {
             triggerGameOver(message: String(format: "CAUGHT %.1fs", survivalTime))
             print("Cursor Hunt game over: \(survivalTime)s")
@@ -119,8 +120,8 @@ class CursorHuntGame: GameBase {
 
         syncBorder(around: bounds)
         if speed > 20 {
-            let targetTilt = atan2(velocity.y, velocity.x) * 0.15
-            tiltAngle += (targetTilt - tiltAngle) * 0.08
+            let targetTilt = atan2(velocity.y, velocity.x) * 0.4
+            tiltAngle += (targetTilt - tiltAngle) * 0.2
         } else {
             tiltAngle *= 0.9
         }

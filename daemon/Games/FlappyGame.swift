@@ -29,7 +29,8 @@ class FlappyGame: GameBase {
     private let pipeCapHeight: CGFloat = 28
     private var pipeGap: CGFloat = 200
     private var pipeInterval: CGFloat = 260
-    private let scrollSpeed: CGFloat = 200
+    private let baseScrollSpeed: CGFloat = 200
+    private let maxScrollSpeed: CGFloat = 350
 
     // Pixel-art sprites
     private enum Sprites {
@@ -184,11 +185,14 @@ class FlappyGame: GameBase {
         // Wobble tilt (border glow only)
         if started {
             let targetTilt = velocity / 800.0
-            let clampedTilt = max(-0.3, min(0.6, targetTilt))
-            tiltAngle += (clampedTilt - tiltAngle) * 0.06
+            let clampedTilt = max(-0.5, min(0.8, targetTilt))
+            tiltAngle += (clampedTilt - tiltAngle) * 0.15
         } else {
             tiltAngle = 0
         }
+
+        // Speed ramp: increases with score
+        let scrollSpeed = min(baseScrollSpeed + CGFloat(score) * 5, maxScrollSpeed)
 
         // Scroll pipes
         if started {

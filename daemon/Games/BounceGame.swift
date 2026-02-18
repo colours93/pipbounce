@@ -65,7 +65,7 @@ class BounceGame: GameBase {
 
     // Drag state
     private var isDragging = false
-    private var wasMouseDown = false
+    var wasMouseDown = false
     private var grabOffset = CGPoint.zero
     private var posHistory: [(pos: CGPoint, time: UInt64)] = []
 
@@ -93,6 +93,11 @@ class BounceGame: GameBase {
     // Score (paddle mode only)
     private var triggeredMilestones: Set<Int> = []
 
+    // Perk system
+    let perkState = PerkState()
+    var perkUI: BouncePerkUI?
+    var isPerkSelecting = false
+
 
     // MARK: - GameBase Hooks
 
@@ -113,6 +118,8 @@ class BounceGame: GameBase {
         reactionTimer = 0
         dodgeOffset = 0
         panicFreezeTimer = 0
+        perkState.reset()
+        isPerkSelecting = false
 
         borderRef?.rotationPadding = max(pip.bounds.size.width, pip.bounds.size.height) * 0.3
 
@@ -122,6 +129,9 @@ class BounceGame: GameBase {
             } else {
                 DispatchQueue.main.sync { self.createPaddleOverlays(screen: screen) }
             }
+            let pui = BouncePerkUI(game: self)
+            pui.createHUD(screen: screen, screenH: screenH)
+            perkUI = pui
         }
 
         print("Bounce started (paddleMode=\(paddleMode))")
@@ -205,6 +215,9 @@ class BounceGame: GameBase {
         paddleLayer = nil
         paddleWindow?.orderOut(nil)
         paddleWindow = nil
+        perkUI?.cleanup()
+        perkUI = nil
+        isPerkSelecting = false
         paddleMode = false  // reset to default for next launch
         print("Bounce stopped — final score: \(score)")
     }
@@ -213,6 +226,11 @@ class BounceGame: GameBase {
 
     override func gameTick() {
         guard active, let _ = cachedAXWindow else { return }
+
+        if isPerkSelecting {
+            perkUI?.tickSelection()
+            return
+        }
 
         refreshPipSize()
         borderRef?.rotationPadding = max(cachedPipSize.width, cachedPipSize.height) * 0.3
@@ -265,25 +283,70 @@ class BounceGame: GameBase {
             velocity.x = max(-maxVel, min(maxVel, velocity.x))
             velocity.y = max(-maxVel, min(maxVel, velocity.y))
 
+            // Homing: nudge velocity toward paddle center
+            if paddleMode && perkState.homingStrength > 0, let pw = paddleWindow {
+                let paddleCenter = CGPoint(x: pw.frame.midX, y: screenH - pw.frame.midY)
+                let pipCenter = CGPoint(x: position.x + cachedPipSize.width / 2,
+                                         y: position.y + cachedPipSize.height / 2)
+                let toP = CGPoint(x: paddleCenter.x - pipCenter.x, y: paddleCenter.y - pipCenter.y)
+                let dist = sqrt(toP.x * toP.x + toP.y * toP.y)
+                if dist > 1 {
+                    let spd = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+                    let nudge = perkState.homingStrength * spd
+                    velocity.x += toP.x / dist * nudge
+                    velocity.y += toP.y / dist * nudge
+                }
+            }
+
+            // Gravity well: pull toward paddle when close
+            if paddleMode && perkState.gravityWellStrength > 0, let pw = paddleWindow {
+                let paddleCenter = CGPoint(x: pw.frame.midX, y: screenH - pw.frame.midY)
+                let pipCenter = CGPoint(x: position.x + cachedPipSize.width / 2,
+                                         y: position.y + cachedPipSize.height / 2)
+                let dx = paddleCenter.x - pipCenter.x
+                let dy = paddleCenter.y - pipCenter.y
+                let dist = sqrt(dx * dx + dy * dy)
+                if dist < 120 && dist > 1 {
+                    velocity.x += dx / dist * perkState.gravityWellStrength * dt
+                    velocity.y += dy / dist * perkState.gravityWellStrength * dt
+                }
+            }
+
             position.x += velocity.x * dt
             position.y += velocity.y * dt
 
             // Bounce off screen edges (slide along edge, don't glitch through)
+            var wallBounced = false
             if position.x < screen.minX {
                 position.x = screen.minX
                 velocity.x = abs(velocity.x) * elasticity
+                wallBounced = true
             }
             if position.x + size.width > screen.maxX {
                 position.x = screen.maxX - size.width
                 velocity.x = -abs(velocity.x) * elasticity
+                wallBounced = true
             }
             if position.y < screen.minY {
                 position.y = screen.minY
                 velocity.y = abs(velocity.y) * elasticity
+                wallBounced = true
             }
             if position.y + size.height > screen.maxY {
                 position.y = screen.maxY - size.height
                 velocity.y = -abs(velocity.y) * elasticity
+                wallBounced = true
+            }
+
+            // Ricochet: add random angle deviation on wall bounce
+            if wallBounced && paddleMode && perkState.ricochetAngle > 0 {
+                let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+                if speed > 1 {
+                    let angle = atan2(velocity.y, velocity.x)
+                    let deviation = CGFloat.random(in: -perkState.ricochetAngle...perkState.ricochetAngle)
+                    velocity.x = cos(angle + deviation) * speed
+                    velocity.y = sin(angle + deviation) * speed
+                }
             }
 
             // Hard clamp
@@ -302,7 +365,9 @@ class BounceGame: GameBase {
 
         // --- AI Paddle (paddle mode only) ---
         if paddleMode {
+            perkState.tickTimers(dt: dt)
             tickPaddle(screen: screen, size: size, now: now, dt: dt)
+            perkUI?.updateHUD(perkState: perkState)
         }
 
         // --- Update border ---
@@ -355,10 +420,7 @@ class BounceGame: GameBase {
         let px = (point.x - screen.minX) / w
         let py = (point.y - screen.minY) / h
 
-        // Distance to each edge
-        let dBottom = point.y - screen.minY  // edge 2 (y = maxY in our coords, but pip coords have minY at top... wait)
-        // Actually: in our coordinate system, position.y increases downward, screen.minY is top, screen.maxY is bottom
-        // Bottom edge = screen.maxY, Top edge = screen.minY
+        // In our coordinate system, position.y increases downward
         let dTop = py          // fraction from top
         let dBot = 1.0 - py    // fraction from bottom
         let dLeft = px
@@ -372,23 +434,22 @@ class BounceGame: GameBase {
     }
 
     private func currentPaddleSpeed() -> CGFloat {
-        // Ramps from base to max over score 0..50
+        // Ramps from base to max over score 0..50, plus perk level bonus
         let t = min(CGFloat(score) / 50.0, 1.0)
-        return paddleBaseSpeed + (paddleMaxSpeed - paddleBaseSpeed) * t
+        let base = paddleBaseSpeed + (paddleMaxSpeed - paddleBaseSpeed) * t
+        return min(base + perkState.paddleSpeedBonus, 0.70)
     }
 
     private func currentReactionInterval() -> CGFloat {
-        // How often the paddle re-evaluates where the PiP is
-        // Starts slow (big delay), gets snappier with score
         let t = min(CGFloat(score) / 40.0, 1.0)
-        return 0.35 - 0.25 * t  // 0.35s -> 0.10s
+        let base = 0.35 - 0.25 * t
+        return max(base - perkState.reactionDelayReduction, 0.05)
     }
 
     private func currentDodgeInaccuracy() -> CGFloat {
-        // How far off the paddle's dodge target is from perfect opposite
-        // Starts very inaccurate, tightens with score
         let t = min(CGFloat(score) / 60.0, 1.0)
-        return 0.15 - 0.10 * t  // ±0.15 -> ±0.05 perimeter units
+        let base = 0.15 - 0.10 * t
+        return max(base - perkState.dodgeInaccuracyReduction, 0.015)
     }
 
     private func tickPaddle(screen: CGRect, size: CGSize, now: UInt64, dt: CGFloat) {
@@ -413,6 +474,18 @@ class BounceGame: GameBase {
             if reactionTarget >= 1.0 { reactionTarget -= 1.0 }
         }
 
+        // Drunk: wobble the reaction target each frame
+        if perkState.isActive(.drunk) {
+            reactionTarget += CGFloat.random(in: -0.10...0.10)
+            if reactionTarget < 0 { reactionTarget += 1.0 }
+            if reactionTarget >= 1.0 { reactionTarget -= 1.0 }
+        }
+
+        // Ghost: paddle dodges blind (random target)
+        if perkState.isActive(.ghost) {
+            reactionTarget = CGFloat.random(in: 0..<1.0)
+        }
+
         // --- Panic: when PiP is heading straight at the paddle, brief freeze ---
         let dx = pipCenter.x - (screen.minX + perimeterT * screen.width)
         let dy = pipCenter.y - (screen.minY + perimeterT * screen.height)
@@ -424,18 +497,23 @@ class BounceGame: GameBase {
         } else if distToPaddle < screenDiag * 0.15 {
             // PiP got close — paddle panics and freezes briefly
             // Less panic at higher scores (paddle gets braver)
-            let panicChance = max(0.1, 0.5 - CGFloat(score) * 0.008)
+            let panicChance = max(0.03, 0.5 - CGFloat(score) * 0.008 - perkState.panicChanceReduction)
             if CGFloat.random(in: 0...1) < panicChance {
                 panicFreezeTimer = CGFloat.random(in: 0.08...0.25)
             }
         }
 
         // --- Move along perimeter toward reaction target ---
-        let effectiveSpeed: CGFloat
-        if panicFreezeTimer > 0 {
-            effectiveSpeed = currentPaddleSpeed() * 0.15  // nearly frozen during panic
+        var effectiveSpeed: CGFloat
+        if perkState.isActive(.freeze) {
+            effectiveSpeed = 0
+        } else if panicFreezeTimer > 0 {
+            effectiveSpeed = currentPaddleSpeed() * 0.15
         } else {
             effectiveSpeed = currentPaddleSpeed()
+        }
+        if perkState.isActive(.slowmo) {
+            effectiveSpeed *= 0.4
         }
 
         var diff = reactionTarget - perimeterT
@@ -454,21 +532,28 @@ class BounceGame: GameBase {
         paddleEdge = edge
         paddleEdgeT = max(0.02, min(0.98, edgeT))
 
-        // Compute paddle rect
-        let paddleRect: CGRect
+        // Compute paddle rect (with shrink ray)
+        let effectivePaddleLen = paddleLength * perkState.paddleLengthMultiplier
+        var paddleRect: CGRect
         switch paddleEdge {
         case 0:
-            let x = screen.minX + paddleEdgeT * (screen.width - paddleLength)
-            paddleRect = CGRect(x: x, y: screen.minY, width: paddleLength, height: paddleThickness)
+            let x = screen.minX + paddleEdgeT * (screen.width - effectivePaddleLen)
+            paddleRect = CGRect(x: x, y: screen.minY, width: effectivePaddleLen, height: paddleThickness)
         case 1:
-            let y = screen.minY + paddleEdgeT * (screen.height - paddleLength)
-            paddleRect = CGRect(x: screen.maxX - paddleThickness, y: y, width: paddleThickness, height: paddleLength)
+            let y = screen.minY + paddleEdgeT * (screen.height - effectivePaddleLen)
+            paddleRect = CGRect(x: screen.maxX - paddleThickness, y: y, width: paddleThickness, height: effectivePaddleLen)
         case 2:
-            let x = screen.minX + paddleEdgeT * (screen.width - paddleLength)
-            paddleRect = CGRect(x: x, y: screen.maxY - paddleThickness, width: paddleLength, height: paddleThickness)
+            let x = screen.minX + paddleEdgeT * (screen.width - effectivePaddleLen)
+            paddleRect = CGRect(x: x, y: screen.maxY - paddleThickness, width: effectivePaddleLen, height: paddleThickness)
         default:
-            let y = screen.minY + paddleEdgeT * (screen.height - paddleLength)
-            paddleRect = CGRect(x: screen.minX, y: y, width: paddleThickness, height: paddleLength)
+            let y = screen.minY + paddleEdgeT * (screen.height - effectivePaddleLen)
+            paddleRect = CGRect(x: screen.minX, y: y, width: paddleThickness, height: effectivePaddleLen)
+        }
+
+        // Earthquake: jitter paddle position
+        if perkState.isActive(.earthquake) {
+            paddleRect.origin.x += CGFloat.random(in: -8...8)
+            paddleRect.origin.y += CGFloat.random(in: -8...8)
         }
 
         // Update paddle window
@@ -481,16 +566,26 @@ class BounceGame: GameBase {
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 pLayer.frame = CGRect(origin: .zero, size: nsFrame.size)
+                // Ghost: flicker opacity (reset when expired)
+                if perkState.isActive(.ghost) {
+                    pLayer.opacity = Float.random(in: 0.05...0.3)
+                } else if pLayer.opacity < 0.5 {
+                    pLayer.opacity = 1.0
+                }
                 CATransaction.commit()
             }
         }
 
-        // --- Collision ---
-        let pipRect = CGRect(origin: position, size: size)
+        // --- Collision (thicc inflates PiP hitbox) ---
+        let collisionSize = perkState.isActive(.thicc)
+            ? CGSize(width: size.width * 1.8, height: size.height * 1.8)
+            : size
+        let pipRect = CGRect(origin: position, size: collisionSize)
         if pipRect.intersects(paddleRect) && now > paddleHitCooldown {
-            score += 1
+            perkState.registerHit()
+            score += perkState.scorePerHit
             scoreLabel?.stringValue = "\(score)"
-            paddleHitCooldown = now + secondsToMach(0.5)
+            paddleHitCooldown = now + secondsToMach(perkState.hitCooldownSeconds)
 
             // On hit: scramble the paddle's position a bit (it got caught, needs to recover)
             perimeterT += CGFloat.random(in: -0.15...0.15)
@@ -515,6 +610,13 @@ class BounceGame: GameBase {
                     let tier = milestones.firstIndex(of: m)! + 1
                     borderRef?.burstGeometry(tier: tier, around: pipRect)
                 }
+            }
+
+            // Check perk offering
+            if perkState.shouldOfferPerk() {
+                isPerkSelecting = true
+                perkUI?.showSelection(perks: perkState.randomOffering(),
+                                       screen: screen, screenH: screenH)
             }
         }
     }

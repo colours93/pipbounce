@@ -79,7 +79,7 @@ class GameBase: MiniGame {
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         t.schedule(deadline: .now(), repeating: .milliseconds(timerIntervalMs), leeway: .microseconds(100))
         t.setEventHandler { [weak self] in
-            guard let self, self.active else { return }
+            guard let self, self.active, self.cachedAXWindow != nil else { return }
             self.gameTick()
         }
         gameTimer = t
@@ -134,6 +134,22 @@ class GameBase: MiniGame {
     /// Called every timer tick. Implement game logic here.
     func gameTick() {
         fatalError("Subclass must override gameTick()")
+    }
+
+    // MARK: - Safety
+
+    /// Check if the PiP window still exists. Auto-stops the game if not.
+    /// Call at the top of gameTick() for resilience against PiP disappearing mid-game.
+    @discardableResult
+    func verifyPipAlive() -> Bool {
+        guard let ax = cachedAXWindow else { stop(); return false }
+        var ref: CFTypeRef?
+        if AXUIElementCopyAttributeValue(ax, kAXPositionAttribute as CFString, &ref) != .success {
+            print("[GameBase] PiP window lost — stopping game")
+            stop()
+            return false
+        }
+        return true
     }
 
     // MARK: - Shared Utilities

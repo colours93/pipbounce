@@ -60,7 +60,7 @@ class PacManGame: GameBase {
     }
     private var ghosts: [Ghost] = []
     private let ghostSpeed: CGFloat = 2.8
-    private let ghostScaredSpeed: CGFloat = 1.5
+    private let ghostScaredSpeed: CGFloat = 1.8
 
     // MARK: - Pixel Art Sprites
 
@@ -573,7 +573,7 @@ class PacManGame: GameBase {
         // Smooth camera follow
         let targetCamX = playerWorld.x - screen.width / 2
         let targetCamY = playerWorld.y - screen.height / 2
-        let camLerp: CGFloat = 0.08
+        let camLerp: CGFloat = 0.15
         cameraX += (targetCamX - cameraX) * camLerp
         cameraY += (targetCamY - cameraY) * camLerp
 
@@ -634,7 +634,7 @@ class PacManGame: GameBase {
 
         let nd = dirDelta[nextDir]
         if isWalkable(nCol + nd.dc, nRow + nd.dr) {
-            let snapThresh: CGFloat = 0.3
+            let snapThresh: CGFloat = 0.38
             if abs(playerCol - CGFloat(nCol)) < snapThresh && abs(playerRow - CGFloat(nRow)) < snapThresh {
                 playerDir = nextDir
             }
@@ -677,8 +677,8 @@ class PacManGame: GameBase {
             let ddy = targetRow - ghosts[index].row
             let mag = hypot(ddx, ddy)
             if mag > 0 {
-                ghosts[index].col += (ddx / mag) * ghostSpeed * dt * 1.5
-                ghosts[index].row += (ddy / mag) * ghostSpeed * dt * 1.5
+                ghosts[index].col += (ddx / mag) * ghostSpeed * dt * 2.0
+                ghosts[index].row += (ddy / mag) * ghostSpeed * dt * 2.0
             }
             return
         }

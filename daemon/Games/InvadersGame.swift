@@ -355,7 +355,7 @@ class InvadersGame: GameBase {
     private func startNextWave() {
         wave += 1
         baseSpeed = min(baseSpeed * 1.15, 200)
-        alienShotInterval = max(alienShotInterval * 0.85, 0.4)
+        alienShotInterval = max(alienShotInterval * 0.85, 0.3)
         waveStartGridY = min(waveStartGridY + 15, 200)
 
         // Clear old alien layers
@@ -600,12 +600,6 @@ class InvadersGame: GameBase {
         updateParticles(dt: dt)
 
         // --- Move PiP (ship) ---
-        // Blink ship during invulnerability
-        var hideShip = false
-        if invulnerable && blinkTimer % 8 < 4 {
-            hideShip = true
-        }
-
         movePip(to: CGPoint(x: shipX, y: shipY))
 
         // --- Update visuals ---
@@ -640,9 +634,10 @@ class InvadersGame: GameBase {
             p.layer.opacity = Float(p.life / p.maxLife)
         }
 
-        // Border
+        // Border — blink border during invulnerability instead of moving PiP offscreen
+        let blinkHidden = invulnerable && blinkTimer % 8 < 4
         if settings.glow, let border = borderRef {
-            if hideShip {
+            if blinkHidden {
                 border.hide()
             } else {
                 border.show(around: bounds)
@@ -650,11 +645,6 @@ class InvadersGame: GameBase {
         }
 
         CATransaction.commit()
-
-        // Hide PiP window during blink (move it offscreen briefly)
-        if hideShip {
-            movePip(to: CGPoint(x: -9999, y: -9999))
-        }
 
         lastBounds = bounds
     }
@@ -677,7 +667,7 @@ class InvadersGame: GameBase {
 
     private func spawnExplosion(x: CGFloat, y: CGFloat, color: NSColor) {
         guard let rootLayer = overlayLayer else { return }
-        let count = Int.random(in: 4...6)
+        let count = Int.random(in: 8...14)
         for _ in 0..<count {
             let layer = CALayer()
             let s: CGFloat = CGFloat.random(in: 2...5)
@@ -688,7 +678,7 @@ class InvadersGame: GameBase {
             let vx = CGFloat.random(in: -150...150)
             let vy = CGFloat.random(in: -150...150)
             particles.append(Particle(layer: layer, x: x, y: y, vx: vx, vy: vy,
-                                       life: 0.3, maxLife: 0.3))
+                                       life: 0.45, maxLife: 0.45))
         }
     }
 

@@ -148,7 +148,7 @@ class ControlServer {
                 sema.signal()
             }
             sema.wait()
-            return "{\"bounce\":\(bounce.active)}"
+            return "{\"bouncePaddle\":\(bounce.active)}"
         }
 
         if firstLine.contains("POST /bounce") {
@@ -159,7 +159,7 @@ class ControlServer {
                 sema.signal()
             }
             sema.wait()
-            return "{\"bounce\":\(bounce.active)}"
+            return "{\"bounceAuto\":\(bounce.active)}"
         }
 
         if firstLine.contains("POST /invaders") {

@@ -174,7 +174,7 @@ for (const game of games) {
     try {
       const res = await fetch(`${API}/${game.key}`, { method: "POST" });
       const data = await res.json();
-      const isRunning = !!data[game.key];
+      const isRunning = !!data[game.statusKey || game.key];
       el.querySelector(".game-label").textContent = isRunning
         ? game.stopLabel
         : game.label;

@@ -107,6 +107,11 @@ class ControlServer {
                 + "\"pipActive\":\(pip != nil)}"
         }
 
+        if firstLine.contains("GET /debug") {
+            let result = debugPipDiscovery()
+            return result
+        }
+
         if firstLine.contains("POST /toggle") {
             settings.enabled.toggle()
             print(settings.enabled ? "Dodge enabled" : "Dodge paused")

@@ -1,3 +1,18 @@
+// Inject game icons
+document.querySelectorAll('.game-card[data-icon]').forEach(card => {
+  const key = card.getAttribute('data-icon');
+  const iconEl = card.querySelector('.game-icon');
+  if (GAME_ICONS[key] && iconEl) iconEl.innerHTML = GAME_ICONS[key];
+});
+
+// Settings toggle
+const settingsToggle = document.getElementById('settingsToggle');
+const settingsPanel = document.getElementById('settingsPanel');
+settingsToggle.addEventListener('click', () => {
+  settingsToggle.classList.toggle('open');
+  settingsPanel.classList.toggle('open');
+});
+
 const API = "http://127.0.0.1:51789";
 
 const els = {

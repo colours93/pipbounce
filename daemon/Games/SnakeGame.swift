@@ -466,30 +466,30 @@ class SnakeGame: GameBase {
 
         let cell = CAEmitterCell()
         cell.birthRate = 0  // we fire manually
-        cell.lifetime = 0.4
-        cell.velocity = 120
+        cell.lifetime = 0.5
+        cell.velocity = 160
         cell.velocityRange = 40
         cell.emissionRange = .pi * 2
-        cell.scale = 0.08
+        cell.scale = 0.12
         cell.scaleRange = 0.03
-        cell.alphaSpeed = -2.0
+        cell.alphaSpeed = -1.8
         cell.color = NSColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 1.0).cgColor
         cell.contents = makeCircleImage(size: 12, color: .white)
 
         let cell2 = CAEmitterCell()
         cell2.birthRate = 0
-        cell2.lifetime = 0.4
-        cell2.velocity = 100
+        cell2.lifetime = 0.5
+        cell2.velocity = 140
         cell2.velocityRange = 30
         cell2.emissionRange = .pi * 2
-        cell2.scale = 0.06
+        cell2.scale = 0.09
         cell2.scaleRange = 0.02
-        cell2.alphaSpeed = -2.0
+        cell2.alphaSpeed = -1.8
         cell2.color = NSColor(red: 0.1, green: 0.9, blue: 0.3, alpha: 1.0).cgColor
         cell2.contents = makeCircleImage(size: 12, color: .white)
 
-        cell.birthRate = 30
-        cell2.birthRate = 30
+        cell.birthRate = 50
+        cell2.birthRate = 50
         emitter.emitterCells = [cell, cell2]
         emitter.beginTime = CACurrentMediaTime()
         pw.contentView!.layer!.addSublayer(emitter)

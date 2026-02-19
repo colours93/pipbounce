@@ -628,11 +628,34 @@ class BreakoutGame: GameBase {
         if !extraLifeGiven500 && score >= 500 && lives < 5 {
             extraLifeGiven500 = true
             lives += 1
+            flashExtraLife()
         }
         if !extraLifeGiven1500 && score >= 1500 && lives < 5 {
             extraLifeGiven1500 = true
             lives += 1
+            flashExtraLife()
         }
+    }
+
+    private func flashExtraLife() {
+        scoreLabel?.stringValue = formatScore()
+
+        guard let layer = scoreLabel?.layer else { return }
+
+        // Flash green background
+        layer.backgroundColor = NSColor(red: 0.1, green: 0.9, blue: 0.3, alpha: 0.8).cgColor
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            layer.backgroundColor = nil
+        }
+
+        // Scale pop animation
+        let anim = CABasicAnimation(keyPath: "transform.scale")
+        anim.fromValue = 1.3
+        anim.toValue = 1.0
+        anim.duration = 0.3
+        anim.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        anim.isRemovedOnCompletion = true
+        layer.add(anim, forKey: "extraLifePop")
     }
 
     private func advanceLevel() {

@@ -83,6 +83,9 @@ class FlappyGame: GameBase {
     // Wobble (border glow only — can't rotate Chrome's window)
     private var tiltAngle: CGFloat = 0
 
+    // Death overlay (Dark Souls "YOU DIED")
+    private var deathOverlay: NSWindow?
+
     // Game state
     private var started = false
 
@@ -139,12 +142,15 @@ class FlappyGame: GameBase {
         borderRef?.rotationPadding = 0
 
         let pipeList = pipes
+        let dw = deathOverlay
         let doCleanup = {
             for p in pipeList {
                 p.topWindow.orderOut(nil)
                 p.bottomWindow.orderOut(nil)
             }
+            dw?.orderOut(nil)
         }
+        deathOverlay = nil
         if Thread.isMainThread { doCleanup() }
         else { DispatchQueue.main.async { doCleanup() } }
 
@@ -163,7 +169,7 @@ class FlappyGame: GameBase {
         let now = mach_absolute_time()
 
         if gameOver {
-            if machToSeconds(now - gameEndMach) > 2.0 { stop() }
+            if machToSeconds(now - gameEndMach) > 3.0 { stop() }
             return
         }
 
@@ -284,7 +290,67 @@ class FlappyGame: GameBase {
     private func doGameOver() {
         if score > bestScore { bestScore = score }
         triggerGameOver(message: "Game Over  \(score)")
+        showYouDied()
         print("Flappy game over: score=\(score) best=\(bestScore)")
+    }
+
+    private func showYouDied() {
+        let screen = getScreenFrame()
+
+        let ow = NSWindow(contentRect: NSRect(x: screen.minX, y: 0, width: screen.width, height: screenH),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        ow.isOpaque = false
+        ow.backgroundColor = .clear
+        ow.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 1)
+        ow.ignoresMouseEvents = true
+        ow.hasShadow = false
+        ow.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
+        ow.contentView!.wantsLayer = true
+
+        let root = ow.contentView!.layer!
+
+        // Dark vignette background
+        let bg = CALayer()
+        bg.frame = CGRect(x: 0, y: 0, width: screen.width, height: screenH)
+        bg.backgroundColor = NSColor(red: 0, green: 0, blue: 0, alpha: 0.75).cgColor
+        bg.opacity = 0
+        root.addSublayer(bg)
+
+        // "YOU DIED" text
+        let text = CATextLayer()
+        text.string = "YOU DIED"
+        text.font = NSFont(name: "Times New Roman", size: 72) ?? NSFont.systemFont(ofSize: 72, weight: .bold)
+        text.fontSize = 72
+        text.foregroundColor = NSColor(red: 0.7, green: 0.1, blue: 0.1, alpha: 1.0).cgColor
+        text.alignmentMode = .center
+        text.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let textW: CGFloat = 600
+        let textH: CGFloat = 100
+        text.frame = CGRect(x: (screen.width - textW) / 2, y: (screenH - textH) / 2, width: textW, height: textH)
+        text.opacity = 0
+        root.addSublayer(text)
+
+        ow.orderFrontRegardless()
+        deathOverlay = ow
+
+        // Fade in background
+        let bgFade = CABasicAnimation(keyPath: "opacity")
+        bgFade.fromValue = 0.0
+        bgFade.toValue = 1.0
+        bgFade.duration = 1.0
+        bgFade.fillMode = .forwards
+        bgFade.isRemovedOnCompletion = false
+        bg.add(bgFade, forKey: "fadeIn")
+
+        // Fade in text slightly delayed
+        let textFade = CABasicAnimation(keyPath: "opacity")
+        textFade.fromValue = 0.0
+        textFade.toValue = 1.0
+        textFade.duration = 1.2
+        textFade.beginTime = CACurrentMediaTime() + 0.3
+        textFade.fillMode = .forwards
+        textFade.isRemovedOnCompletion = false
+        text.add(textFade, forKey: "fadeIn")
     }
 
     // MARK: - Pipe Creation

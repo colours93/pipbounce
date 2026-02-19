@@ -1,7 +1,5 @@
 import Cocoa
 
-// MARK: - PID Lock
-
 let pidPath = NSString("~/.pipbounce/pipbounce.pid").expandingTildeInPath
 
 func killExisting() {
@@ -23,8 +21,6 @@ func cleanup() {
     try? FileManager.default.removeItem(atPath: pidPath)
 }
 
-// MARK: - Entry Point
-
 setbuf(stdout, nil)
 setbuf(stderr, nil)
 
@@ -32,20 +28,18 @@ killExisting()
 writePid()
 
 let app = NSApplication.shared
+app.setActivationPolicy(.accessory)
+
 settings.load()
 let server = ControlServer()
 server.start()
 let daemon = PipBounceDaemon()
-daemon.start()
 
-signal(SIGINT) { _ in
-    cleanup()
-    exit(0)
+signal(SIGINT) { _ in cleanup(); exit(0) }
+signal(SIGTERM) { _ in cleanup(); exit(0) }
+
+DispatchQueue.main.async {
+    daemon.start()
 }
 
-signal(SIGTERM) { _ in
-    cleanup()
-    exit(0)
-}
-
-RunLoop.main.run()
+app.run()

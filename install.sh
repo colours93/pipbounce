@@ -100,7 +100,7 @@ swiftc "${SWIFT_FILES[@]}" \
     -O
 
 chmod +x "$BINARY"
-SIGN_ID=$(security find-identity -v -p codesigning | grep "pipbounce Dev" | head -1 | awk -F'"' '{print $2}' || true)
+SIGN_ID=$(security find-identity -v -p codesigning | grep -E "pipbounce Dev|xpip Dev" | head -1 | awk -F'"' '{print $2}' || true)
 if [ -n "$SIGN_ID" ]; then
     codesign --force --sign "$SIGN_ID" "$APP_BUNDLE"
     log_ok "Signed with stable identity: $SIGN_ID"
@@ -192,13 +192,8 @@ cat > "$PLIST_PATH" << PLISTEOF
 </plist>
 PLISTEOF
 
-# Reset Accessibility approval so macOS re-prompts for the new binary.
-# tccutil uses the bundle identifier to clear TCC entries.
-if tccutil reset Accessibility com.pipbounce.daemon 2>/dev/null; then
-    log_ok "Reset Accessibility approval for new binary."
-else
-    log_ok "Could not reset TCC (may need manual removal)."
-fi
+# Skip TCC reset — preserve existing Accessibility approval across reinstalls.
+# The stable code signature (or ad-hoc with same bundle ID) keeps the grant valid.
 
 launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
 launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true

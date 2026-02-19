@@ -48,10 +48,13 @@ class PiPong2Game: GameBase {
     private var trailLayers: [CALayer] = []
     private var trailPositions: [CGPoint] = []
     private var trailFrameCounter = 0
-    private let trailCount = 3
+    private let trailCount = 5
 
     // Screen shake
     private var shakeFramesRemaining = 0
+
+    // Center line
+    private var centerLine: NSWindow?
 
     // PiP paddle position
     private var pipPaddleY: CGFloat = 0
@@ -98,17 +101,19 @@ class PiPong2Game: GameBase {
     override func onStop() {
         ballPos = .zero
 
-        let bw = ballWindow, aw = aiPaddle, tw = trailWindow
+        let bw = ballWindow, aw = aiPaddle, tw = trailWindow, cl = centerLine
         let cleanup = {
             bw?.orderOut(nil)
             aw?.orderOut(nil)
             tw?.orderOut(nil)
+            cl?.orderOut(nil)
         }
         if Thread.isMainThread { cleanup() }
         else { DispatchQueue.main.async { cleanup() } }
         ballWindow = nil
         aiPaddle = nil
         trailWindow = nil
+        centerLine = nil
         trailLayers = []
         trailPositions = []
         print("Pong stopped")
@@ -350,13 +355,13 @@ class PiPong2Game: GameBase {
     // MARK: - Screen Shake
 
     private func triggerShake() {
-        shakeFramesRemaining = 5
+        shakeFramesRemaining = 6
     }
 
     private func applyShake() -> CGPoint {
         if shakeFramesRemaining > 0 {
             shakeFramesRemaining -= 1
-            return CGPoint(x: CGFloat.random(in: -3...3), y: CGFloat.random(in: -3...3))
+            return CGPoint(x: CGFloat.random(in: -4...4), y: CGFloat.random(in: -4...4))
         }
         return .zero
     }
@@ -382,19 +387,24 @@ class PiPong2Game: GameBase {
         let dotSize: CGFloat = ballSize * 0.8
         let color = glowCGColor()
 
+        // Opacity fades from 0.4 to 0.05, scale from 0.8 to 0.3
+        let opacities: [Float] = [0.4, 0.3, 0.2, 0.1, 0.05]
+        let scales: [CGFloat] = [0.8, 0.67, 0.55, 0.42, 0.3]
+
         for i in 0..<trailLayers.count {
             let posIdx = i + 1
             if posIdx < trailPositions.count {
                 let p = trailPositions[posIdx]
                 let cx = p.x - screen.minX + shakeOffset.x - dotSize / 2
                 let cy = p.y - screen.minY + shakeOffset.y - dotSize / 2
-                let sz = dotSize * (1.0 - CGFloat(i + 1) * 0.15)
+                let scale = i < scales.count ? scales[i] : 0.3
+                let sz = dotSize * scale
                 trailLayers[i].frame = CGRect(x: cx + (dotSize - sz) / 2,
                                                y: screen.height - cy - dotSize + (dotSize - sz) / 2,
                                                width: sz, height: sz)
                 trailLayers[i].cornerRadius = sz / 2
                 trailLayers[i].backgroundColor = color
-                trailLayers[i].opacity = Float(1.0 - CGFloat(i + 1) * 0.25)
+                trailLayers[i].opacity = i < opacities.count ? opacities[i] : 0.05
             }
         }
     }
@@ -463,6 +473,32 @@ class PiPong2Game: GameBase {
         scoreOverlay = sw
         scoreLabel = label
 
+        // Dashed center line (decorative)
+        let centerLineWindow = NSWindow(
+            contentRect: NSRect(x: screen.midX - 1, y: h - screen.maxY,
+                                width: 2, height: screen.height),
+            styleMask: .borderless, backing: .buffered, defer: false)
+        centerLineWindow.isOpaque = false
+        centerLineWindow.backgroundColor = .clear
+        centerLineWindow.level = .floating
+        centerLineWindow.ignoresMouseEvents = true
+        centerLineWindow.hasShadow = false
+        centerLineWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
+        centerLineWindow.contentView!.wantsLayer = true
+
+        let dashHeight: CGFloat = 12
+        let dashSpacing: CGFloat = 24
+        var yOff: CGFloat = 0
+        while yOff + dashHeight <= screen.height {
+            let dash = CALayer()
+            dash.frame = CGRect(x: 0, y: yOff, width: 2, height: dashHeight)
+            dash.backgroundColor = NSColor(white: 1.0, alpha: 0.3).cgColor
+            centerLineWindow.contentView!.layer!.addSublayer(dash)
+            yOff += dashSpacing
+        }
+        centerLineWindow.orderFrontRegardless()
+        centerLine = centerLineWindow
+
         // Trail window
         let tw = NSWindow(contentRect: NSRect(x: screen.minX, y: h - screen.maxY,
                                               width: screen.width, height: screen.height),
@@ -520,6 +556,13 @@ class PiPong2Game: GameBase {
             NSRect(x: screen.maxX - paddleMargin - paddleWidth + shakeOffset.x,
                    y: h - aY - paddleHeight + shakeOffset.y,
                    width: paddleWidth, height: paddleHeight), display: true)
+
+        // Center line
+        if let cl = centerLine {
+            cl.setFrame(NSRect(x: screen.midX - 1 + shakeOffset.x,
+                               y: h - screen.maxY + shakeOffset.y,
+                               width: 2, height: screen.height), display: false)
+        }
 
         // Score overlay
         if let sw = scoreOverlay {

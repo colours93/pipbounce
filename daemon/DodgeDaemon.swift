@@ -19,6 +19,7 @@ class PipBounceDaemon {
     private var cachedPipWindow: AXUIElement?
     private var lastDiscoveryTime = Date.distantPast
     private let discoveryInterval: TimeInterval = 0.5
+    private var tickTimer: DispatchSourceTimer?
     private static var timebaseInfo: mach_timebase_info_data_t = {
         var info = mach_timebase_info_data_t()
         mach_timebase_info(&info)
@@ -27,7 +28,7 @@ class PipBounceDaemon {
 
     func start() {
         if !AXIsProcessTrusted() {
-            print("Accessibility permission required")
+            print("Accessibility permission not granted — add this app in System Settings > Privacy > Accessibility")
         }
 
         installHotkey()
@@ -37,6 +38,7 @@ class PipBounceDaemon {
         t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .microseconds(500))
         t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
+        tickTimer = t
     }
 
     private func quickCheck(_ element: AXUIElement) -> PipWindowInfo? {
@@ -70,7 +72,6 @@ class PipBounceDaemon {
         } else {
             let now = Date()
             guard now.timeIntervalSince(lastDiscoveryTime) >= discoveryInterval else {
-                rgbBorder.hide()
                 return
             }
             lastDiscoveryTime = now
@@ -86,7 +87,6 @@ class PipBounceDaemon {
             return
         }
 
-        // Normal mode -- border tracks real AX position
         if settings.glow {
             rgbBorder.show(around: pip.bounds)
         } else {
@@ -125,7 +125,6 @@ class PipBounceDaemon {
         var pos = CGPoint(x: x, y: y)
         animCurrentPos = pos
 
-        // Move PiP via AX, then IMMEDIATELY move border -- same call, microseconds apart
         if let win = animWindow, let val = AXValueCreate(.cgPoint, &pos) {
             AXUIElementSetAttributeValue(win, kAXPositionAttribute as CFString, val)
         }
@@ -171,9 +170,7 @@ class PipBounceDaemon {
         t.resume()
     }
 
-    /// Toggle any MiniGame. Stops the current game if one is active.
     func toggleGame(_ game: MiniGame) {
-        // Stop any running game first
         let allGames: [MiniGame] = [pipong, pipong2, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids, cursorhunt, doodlejump, pacman]
         for g in allGames where g.active {
             g.stop()
@@ -181,7 +178,6 @@ class PipBounceDaemon {
             rgbBorder.hide()
         }
 
-        // If the requested game was already active, we just stopped it
         if !game.active, let pip = findPipWindow() {
             game.start(screen: getScreenFrame(), pip: pip, border: rgbBorder)
         }

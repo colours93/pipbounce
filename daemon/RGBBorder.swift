@@ -65,21 +65,22 @@ class RGBBorder {
             height: rect.height + borderWidth * 2 + pad * 2)
 
         if window == nil {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+
             let w = NSWindow(contentRect: nsFrame, styleMask: .borderless,
                              backing: .buffered, defer: false)
             w.isOpaque = false
             w.backgroundColor = .clear
-            // One level above .floating so Chrome can't reorder PiP in front
             w.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
             w.ignoresMouseEvents = true
             w.hasShadow = false
             w.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
 
-            let view = NSView(frame: w.contentView!.bounds)
-            view.wantsLayer = true
-            w.contentView!.addSubview(view)
-
-            view.layer!.addSublayer(containerLayer)
+            let cv = w.contentView!
+            cv.wantsLayer = true
+            cv.layerContentsRedrawPolicy = .onSetNeedsDisplay
+            cv.layer!.addSublayer(containerLayer)
 
             gradientLayer.type = .conic
             gradientLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
@@ -88,6 +89,8 @@ class RGBBorder {
 
             maskLayer.fillRule = .evenOdd
             containerLayer.mask = maskLayer
+
+            CATransaction.commit()
 
             let spin = CABasicAnimation(keyPath: "transform.rotation.z")
             spin.fromValue = 0
@@ -115,7 +118,6 @@ class RGBBorder {
         window?.setFrame(nsFrame, display: true)
 
         let viewSize = nsFrame.size
-        window?.contentView?.subviews.first?.frame = NSRect(origin: .zero, size: viewSize)
 
         // Use bounds + position (NOT frame) because containerLayer may have
         // a rotation transform from tilt(). Setting frame while a transform
@@ -168,7 +170,7 @@ class RGBBorder {
         burstLayers.removeAll()
         burstTimer?.cancel()
 
-        guard let w = window, let rootView = w.contentView?.subviews.first else { return }
+        guard let w = window, let rootView = w.contentView else { return }
 
         let pad = rotationPadding
         let center = CGPoint(x: pad + rect.width / 2 + borderWidth,

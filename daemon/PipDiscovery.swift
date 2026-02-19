@@ -24,6 +24,54 @@ private func floatingWindowRects() -> [CGRect] {
     return rects
 }
 
+func debugPipDiscovery() -> String {
+    var out = ""
+    let chromeApps = NSWorkspace.shared.runningApplications.filter {
+        ($0.localizedName ?? "").contains("Chrome")
+            || ($0.bundleIdentifier ?? "").contains("chrome")
+    }
+    out += "AXTrusted: \(AXIsProcessTrusted())\n"
+    out += "chromeApps: \(chromeApps.map { "\($0.localizedName ?? "?") pid=\($0.processIdentifier)" })\n"
+    let floating = floatingWindowRects()
+    out += "floatingRects: \(floating.count)\n"
+    for (i, r) in floating.enumerated() { out += "  float[\(i)] \(r)\n" }
+    for app in chromeApps {
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var windowsRef: CFTypeRef?
+        let err = AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &windowsRef)
+        guard let windows = windowsRef as? [AXUIElement] else {
+            out += "  \(app.localizedName ?? "?"): AX error \(err.rawValue)\n"
+            continue
+        }
+        out += "\(app.localizedName ?? "?"): \(windows.count) windows\n"
+        for (i, w) in windows.enumerated() {
+            var tRef: CFTypeRef?; _ = AXUIElementCopyAttributeValue(w, kAXTitleAttribute as CFString, &tRef)
+            var pRef: CFTypeRef?; _ = AXUIElementCopyAttributeValue(w, kAXPositionAttribute as CFString, &pRef)
+            var sRef: CFTypeRef?; _ = AXUIElementCopyAttributeValue(w, kAXSizeAttribute as CFString, &sRef)
+            var rRef: CFTypeRef?; _ = AXUIElementCopyAttributeValue(w, kAXRoleAttribute as CFString, &rRef)
+            var srRef: CFTypeRef?; _ = AXUIElementCopyAttributeValue(w, kAXSubroleAttribute as CFString, &srRef)
+            var minRef: CFTypeRef?
+            let hasMin = AXUIElementCopyAttributeValue(w, kAXMinimizeButtonAttribute as CFString, &minRef) == .success && minRef != nil
+            var clRef: CFTypeRef?
+            let hasCl = AXUIElementCopyAttributeValue(w, kAXCloseButtonAttribute as CFString, &clRef) == .success && clRef != nil
+            var pos = CGPoint.zero; var size = CGSize.zero
+            if let pv = pRef { AXValueGetValue(pv as! AXValue, .cgPoint, &pos) }
+            if let sv = sRef { AXValueGetValue(sv as! AXValue, .cgSize, &size) }
+            let ratio = size.height > 0 ? size.width / size.height : 0
+            let title = (tRef as? String) ?? ""
+            let matchFloat = floating.contains { r in
+                abs(r.origin.x - pos.x) < 3 && abs(r.origin.y - pos.y) < 3
+                    && abs(r.width - size.width) < 3 && abs(r.height - size.height) < 3
+            }
+            out += "  [\(i)] \"\(title.prefix(40))\" \(Int(size.width))x\(Int(size.height)) ratio=\(String(format:"%.2f", ratio)) role=\(rRef as? String ?? "-") sub=\(srRef as? String ?? "-") min=\(hasMin) close=\(hasCl) float=\(matchFloat)\n"
+        }
+    }
+    let pip = findPipWindow()
+    out += "findPipWindow: \(pip != nil)\n"
+    if let p = pip { out += "  bounds: \(p.bounds)\n" }
+    return out
+}
+
 func findPipWindow() -> PipWindowInfo? {
     let chromeApps = NSWorkspace.shared.runningApplications.filter {
         ($0.localizedName ?? "").contains("Chrome")

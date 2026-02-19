@@ -43,153 +43,156 @@ class FroggerGame: GameBase {
     // MARK: - Pixel Art Sprites
 
     private enum Sprites {
-        // Motorcycle variants: 10x8 pixels, displayed at 2x = 20x16
-        // Each variant: rider silhouette, handlebars, wheel with spokes, exhaust
-        static let motorcycleRed: CGImage? = {
+        // ── Cyberpunk Hoverbike variants: 10x8 pixels, displayed at 2x = 20x16 ──
+        // Futuristic hoverbike: sleek helmet rider, carbon fiber body, neon accent strips, thruster exhaust (no wheels)
+
+        static let motorcyclePink: CGImage? = {
             let _ : UInt32 = 0
-            let R : UInt32 = 0xCC2222  // red body
-            let D : UInt32 = 0x881111  // dark red shade
-            let K : UInt32 = 0x1A1A1A  // near-black (rider/wheel)
-            let G : UInt32 = 0x444444  // dark gray
-            let C : UInt32 = 0xAAAAAA  // chrome
-            let H : UInt32 = 0xCCCCCC  // chrome highlight
-            let E : UInt32 = 0xFF6600  // exhaust glow
-            let S : UInt32 = 0x666666  // spoke
+            let N : UInt32 = 0xFF0066  // hot pink neon
+            let Nd: UInt32 = 0xCC0044  // dark pink neon
+            let B : UInt32 = 0x1A1A2A  // carbon fiber body
+            let D : UInt32 = 0x252535  // carbon fiber dark
+            let K : UInt32 = 0x111118  // near-black (rider)
+            let V : UInt32 = 0x334455  // visor tint
+            let T : UInt32 = 0xFF4400  // thruster glow
+            let Tb: UInt32 = 0xFF8844  // thruster bright
             let pixels: [[UInt32]] = [
                 [0, 0, 0, 0, K, K, 0, 0, 0, 0],  // helmet top
-                [0, 0, 0, K, K, K, K, 0, 0, 0],  // helmet
-                [0, 0, 0, 0, K, K, H, 0, 0, 0],  // visor + chrome
-                [0, 0, C, R, K, K, R, C, 0, 0],  // handlebars + body
-                [0, 0, 0, R, D, D, R, 0, 0, 0],  // torso
-                [E, G, D, R, D, D, R, 0, 0, 0],  // exhaust + engine
-                [0, G, K, S, K, K, S, K, 0, 0],  // wheel top
-                [0, 0, K, K, G, G, K, K, 0, 0],  // wheel bottom
+                [0, 0, 0, K, V, V, K, 0, 0, 0],  // helmet + visor
+                [0, 0, 0, 0, K, K, N, 0, 0, 0],  // visor + neon strip
+                [0, 0, N, B, K, K, B, N, 0, 0],  // handlebars + neon tips
+                [0, 0, 0, B, D, D, B, 0, 0, 0],  // torso on bike
+                [Tb, T, D, B, Nd,Nd, B, D, 0, 0],  // thruster + neon engine strip
+                [0, T, D, N, D, D, N, D, 0, 0],  // hover glow (neon underline)
+                [0, 0, Nd, 0, Nd,Nd, 0, Nd, 0, 0],  // thruster exhaust dots
             ]
             return renderPixelArt(pixels, scale: 2)
         }()
 
-        static let motorcycleBlue: CGImage? = {
+        static let motorcycleCyan: CGImage? = {
             let _ : UInt32 = 0
-            let B : UInt32 = 0x2244AA  // blue body
-            let D : UInt32 = 0x112266  // dark blue shade
-            let K : UInt32 = 0x1A1A1A
-            let G : UInt32 = 0x444444
-            let C : UInt32 = 0xAAAAAA
-            let H : UInt32 = 0xCCCCCC
-            let E : UInt32 = 0xFF6600
-            let S : UInt32 = 0x666666
+            let N : UInt32 = 0x00FFEE  // cyan neon
+            let Nd: UInt32 = 0x00BBAA  // dark cyan neon
+            let B : UInt32 = 0x1A1A2A
+            let D : UInt32 = 0x252535
+            let K : UInt32 = 0x111118
+            let V : UInt32 = 0x334455
+            let T : UInt32 = 0x00CCBB  // cyan thruster
+            let Tb: UInt32 = 0x44FFEE  // cyan thruster bright
             let pixels: [[UInt32]] = [
                 [0, 0, 0, 0, K, K, 0, 0, 0, 0],
-                [0, 0, 0, K, K, K, K, 0, 0, 0],
-                [0, 0, 0, 0, K, K, H, 0, 0, 0],
-                [0, 0, C, B, K, K, B, C, 0, 0],
+                [0, 0, 0, K, V, V, K, 0, 0, 0],
+                [0, 0, 0, 0, K, K, N, 0, 0, 0],
+                [0, 0, N, B, K, K, B, N, 0, 0],
                 [0, 0, 0, B, D, D, B, 0, 0, 0],
-                [E, G, D, B, D, D, B, 0, 0, 0],
-                [0, G, K, S, K, K, S, K, 0, 0],
-                [0, 0, K, K, G, G, K, K, 0, 0],
+                [Tb, T, D, B, Nd,Nd, B, D, 0, 0],
+                [0, T, D, N, D, D, N, D, 0, 0],
+                [0, 0, Nd, 0, Nd,Nd, 0, Nd, 0, 0],
             ]
             return renderPixelArt(pixels, scale: 2)
         }()
 
-        static let motorcycleBlack: CGImage? = {
+        static let motorcycleYellow: CGImage? = {
             let _ : UInt32 = 0
-            let B : UInt32 = 0x333333  // dark body
-            let D : UInt32 = 0x222222  // darker shade
-            let K : UInt32 = 0x1A1A1A
-            let G : UInt32 = 0x444444
-            let C : UInt32 = 0xAAAAAA
-            let H : UInt32 = 0xCCCCCC
-            let E : UInt32 = 0xFF6600
-            let S : UInt32 = 0x666666
+            let N : UInt32 = 0xFFCC00  // yellow neon
+            let Nd: UInt32 = 0xDD9900  // dark yellow neon
+            let B : UInt32 = 0x1A1A2A
+            let D : UInt32 = 0x252535
+            let K : UInt32 = 0x111118
+            let V : UInt32 = 0x334455
+            let T : UInt32 = 0xDDAA00  // yellow thruster
+            let Tb: UInt32 = 0xFFDD44  // yellow thruster bright
             let pixels: [[UInt32]] = [
                 [0, 0, 0, 0, K, K, 0, 0, 0, 0],
-                [0, 0, 0, K, K, K, K, 0, 0, 0],
-                [0, 0, 0, 0, K, K, H, 0, 0, 0],
-                [0, 0, C, B, K, K, B, C, 0, 0],
+                [0, 0, 0, K, V, V, K, 0, 0, 0],
+                [0, 0, 0, 0, K, K, N, 0, 0, 0],
+                [0, 0, N, B, K, K, B, N, 0, 0],
                 [0, 0, 0, B, D, D, B, 0, 0, 0],
-                [E, G, D, B, D, D, B, 0, 0, 0],
-                [0, G, K, S, K, K, S, K, 0, 0],
-                [0, 0, K, K, G, G, K, K, 0, 0],
+                [Tb, T, D, B, Nd,Nd, B, D, 0, 0],
+                [0, T, D, N, D, D, N, D, 0, 0],
+                [0, 0, Nd, 0, Nd,Nd, 0, Nd, 0, 0],
             ]
             return renderPixelArt(pixels, scale: 2)
         }()
 
-        static let motorcycles: [CGImage?] = [motorcycleRed, motorcycleBlue, motorcycleBlack]
+        static let motorcycles: [CGImage?] = [motorcyclePink, motorcycleCyan, motorcycleYellow]
 
-        // Car variants: 20x8 pixels, displayed at 2x = 40x16
-        // Sedan profile: windshield, 2 wheels with hubcaps, headlights, roof/door lines
-        static func makeCar(body: UInt32, dark: UInt32, roof: UInt32) -> CGImage? {
+        // ── Cyberpunk Cyber-Sedan variants: 20x8 pixels, displayed at 2x = 40x16 ──
+        // Low-slung sedan: tinted windows, neon underglow, cyan LED headlights
+        static func makeCar(body: UInt32, dark: UInt32, roof: UInt32, neon: UInt32) -> CGImage? {
             let _ : UInt32 = 0
             let B  = body        // main body
             let D  = dark        // underside shade
             let R  = roof        // roof highlight
-            let W : UInt32 = 0x4477BB  // windshield blue tint
-            let Wh: UInt32 = 0x6699DD  // windshield reflection
-            let K : UInt32 = 0x1A1A1A  // tire
-            let G : UInt32 = 0x444444  // wheel well
-            let H : UInt32 = 0x888888  // hubcap
-            let Y : UInt32 = 0xFFDD44  // headlight
-            let Yg: UInt32 = 0xFFEE88  // headlight glow
-            let T : UInt32 = 0xCC2222  // taillight
-            let C : UInt32 = 0xAAAAAA  // chrome bumper
+            let L  = neon        // neon accent color
+            let W : UInt32 = 0x223355  // tinted windshield (dark)
+            let Wh: UInt32 = 0x334466  // tinted windshield reflection
+            let K : UInt32 = 0x111118  // tire
+            let G : UInt32 = 0x252535  // wheel well
+            let H : UInt32 = 0x555566  // hubcap
+            let Y : UInt32 = 0x00FFEE  // cyan LED headlight
+            let Yg: UInt32 = 0x00BBAA  // headlight glow
+            let T : UInt32 = 0xFF0044  // taillight (neon red)
+            let C : UInt32 = 0x333344  // dark chrome bumper
             let pixels: [[UInt32]] = [
                 [0, 0, 0, 0, 0, R, R, R, R, R, R, R, R, R, 0, 0, 0, 0, 0, 0],  // roof top
                 [0, 0, 0, 0, R, R, B, B, B, B, B, B, B, R, R, 0, 0, 0, 0, 0],  // roof
-                [0, 0, 0, R, W, W, Wh,W, W, W, W, W, Wh,W, W, R, 0, 0, 0, 0],  // windshield
-                [0, 0, C, B, B, B, B, B, B, B, B, B, B, B, B, B, B, C, Yg, 0],  // hood + bumper
+                [0, 0, 0, R, W, W, Wh,W, W, W, W, W, Wh,W, W, R, 0, 0, 0, 0],  // tinted windshield
+                [0, 0, C, B, B, B, B, B, B, B, B, B, B, B, B, B, B, C, Yg, 0],  // hood + dark bumper
                 [0, T, B, B, B, B, B, B, D, D, B, B, B, B, B, B, B, B, Y, 0],  // body + door line
-                [0, T, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, D, Y, 0],  // underside
+                [0, T, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, Y, 0],  // NEON UNDERGLOW STRIP
                 [0, 0, D, G, K, K, G, D, D, D, D, D, D, G, K, K, G, D, 0, 0],  // wheel wells
                 [0, 0, 0, K, K, H, K, 0, 0, 0, 0, 0, 0, K, H, K, K, 0, 0, 0],  // wheels + hubcaps
             ]
             return renderPixelArt(pixels, scale: 2)
         }
 
-        static let carRed:    CGImage? = makeCar(body: 0xBB2222, dark: 0x881111, roof: 0xDD3333)
-        static let carBlue:   CGImage? = makeCar(body: 0x2244AA, dark: 0x112266, roof: 0x3366CC)
-        static let carGreen:  CGImage? = makeCar(body: 0x228833, dark: 0x115522, roof: 0x33AA44)
-        static let carYellow: CGImage? = makeCar(body: 0xBBAA22, dark: 0x887711, roof: 0xDDCC33)
-        static let carWhite:  CGImage? = makeCar(body: 0xCCCCCC, dark: 0x999999, roof: 0xEEEEEE)
+        static let carRedPink:    CGImage? = makeCar(body: 0x661122, dark: 0x330A11, roof: 0x882233, neon: 0xFF0066)
+        static let carBlueCyan:   CGImage? = makeCar(body: 0x112244, dark: 0x0A1133, roof: 0x223366, neon: 0x00FFEE)
+        static let carBlackGreen: CGImage? = makeCar(body: 0x1A1A22, dark: 0x0D0D11, roof: 0x2A2A33, neon: 0x00FF66)
+        static let carPurpleMag:  CGImage? = makeCar(body: 0x331144, dark: 0x1A0A22, roof: 0x442266, neon: 0xFF00CC)
+        static let carSilverBlue: CGImage? = makeCar(body: 0x778899, dark: 0x445566, roof: 0x99AABB, neon: 0x4488FF)
 
-        static let cars: [CGImage?] = [carRed, carBlue, carGreen, carYellow, carWhite]
+        static let cars: [CGImage?] = [carRedPink, carBlueCyan, carBlackGreen, carPurpleMag, carSilverBlue]
 
-        // Truck variants: 32x8 pixels, displayed at 2.5x = 80x20 (close to 80-100 range)
-        // Cab + cargo trailer, 4 wheels, exhaust stack
-        static func makeTruck(cab: UInt32, cabDark: UInt32, cargo: UInt32, cargoDark: UInt32) -> CGImage? {
+        // ── Cyberpunk Armored Cyber-Hauler variants: 32x8 pixels, displayed at 2x ──
+        // Armored truck: LED running lights, neon strip on cargo, thruster exhaust
+        static func makeTruck(cab: UInt32, cabDark: UInt32, cargo: UInt32, cargoDark: UInt32, neon: UInt32) -> CGImage? {
             let _ : UInt32 = 0
             let A  = cab         // cab body
             let Ad = cabDark     // cab shade
             let B  = cargo       // cargo body
             let Bd = cargoDark   // cargo shade
-            let W : UInt32 = 0x4477BB  // windshield
-            let Wh: UInt32 = 0x6699DD  // windshield reflection
-            let K : UInt32 = 0x1A1A1A  // tire
-            let G : UInt32 = 0x444444  // wheel well
-            let H : UInt32 = 0x888888  // hubcap
-            let Y : UInt32 = 0xFFDD44  // headlight
-            let Yg: UInt32 = 0xFFEE88  // headlight glow
-            let T : UInt32 = 0xCC2222  // taillight
-            let C : UInt32 = 0xAAAAAA  // chrome/bumper
-            let E : UInt32 = 0x555555  // exhaust stack
-            let S : UInt32 = 0x888888  // smoke
+            let L  = neon        // neon accent
+            let W : UInt32 = 0x223355  // tinted windshield
+            let Wh: UInt32 = 0x334466  // windshield reflection
+            let K : UInt32 = 0x111118  // tire
+            let G : UInt32 = 0x252535  // wheel well
+            let H : UInt32 = 0x555566  // hubcap
+            let Y : UInt32 = 0x00FFEE  // cyan LED headlight
+            let Yg: UInt32 = 0x00BBAA  // headlight glow
+            let T : UInt32 = 0xFF0044  // taillight neon
+            let C : UInt32 = 0x333344  // dark chrome bumper
+            let Th: UInt32 = 0xFF6622  // thruster glow (replaces exhaust)
+            let Tb: UInt32 = 0xFF8844  // thruster bright
             let pixels: [[UInt32]] = [
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, S, E, 0, A, A, Yg, 0],
-                [0, T, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, 0, 0, E, A, A, A, A, A, A, Y, 0],
+                [0, 0, L, 0, L, 0, L, 0, L, 0, L, 0, L, 0, L, 0, L, 0, L, 0, 0, 0, 0, 0, 0, Tb,Th, 0, A, A, Yg, 0],
+                [0, T, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, 0, 0, Th, A, A, A, A, A, A, Y, 0],
                 [0, T, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, 0, W, Wh, W, A, A, A, A, A, Y, 0],
                 [0, 0, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, B, 0, A, A, A, A, A, A, A, A, C, 0],
                 [0, 0, Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd, 0, Ad,Ad,Ad,Ad,Ad,Ad,Ad,Ad, C, 0],
-                [0, 0, Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd,Bd, 0, Ad,Ad,Ad,Ad,Ad,Ad,Ad,Ad, 0, 0],
+                [0, 0, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, L, 0, L, L, L, L, L, L, L, L, 0, 0],
                 [0, 0, Bd, G, K, K, G, Bd,Bd, G, K, K, G, Bd,Bd,Bd,Bd,Bd,Bd,Bd, 0, 0, Ad, G, K, K, G, Ad, 0, 0, 0, 0],
                 [0, 0, 0, K, K, H, K, 0, 0, K, H, K, K, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, K, K, H, K, 0, 0, 0, 0, 0],
             ]
             return renderPixelArt(pixels, scale: 2)
         }
 
-        static let truckRedBlue:    CGImage? = makeTruck(cab: 0xBB3322, cabDark: 0x882211, cargo: 0x2244AA, cargoDark: 0x112266)
-        static let truckWhiteGray:  CGImage? = makeTruck(cab: 0xCCCCCC, cabDark: 0x999999, cargo: 0x666666, cargoDark: 0x444444)
-        static let truckGreenYellow:CGImage? = makeTruck(cab: 0x228833, cabDark: 0x115522, cargo: 0xBBAA22, cargoDark: 0x887711)
+        static let truckMilitary:   CGImage? = makeTruck(cab: 0x2A2A22, cabDark: 0x1A1A14, cargo: 0x222218, cargoDark: 0x15150F, neon: 0xFF2200)
+        static let truckCorporate:  CGImage? = makeTruck(cab: 0x999999, cabDark: 0x666666, cargo: 0xAAAAAA, cargoDark: 0x777777, neon: 0x00FFEE)
+        static let truckIndustrial: CGImage? = makeTruck(cab: 0x887722, cabDark: 0x554411, cargo: 0xAA9933, cargoDark: 0x776622, neon: 0xFF8800)
 
-        static let trucks: [CGImage?] = [truckRedBlue, truckWhiteGray, truckGreenYellow]
+        static let trucks: [CGImage?] = [truckMilitary, truckCorporate, truckIndustrial]
     }
 
     private struct Car {

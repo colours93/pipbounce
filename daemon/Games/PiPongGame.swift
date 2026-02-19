@@ -7,6 +7,14 @@ let pipong = PiPongGame()
 /// Both paddles are overlay windows. Player controls left paddle with mouse Y.
 class PiPongGame: GameBase {
 
+    // Glow cycle colors: purple → cyan → green → purple
+    private static let glowCycleColors: [CGColor] = [
+        NSColor(red: 0.7, green: 0.2, blue: 1.0, alpha: 1).cgColor,
+        NSColor(red: 0.3, green: 0.8, blue: 1.0, alpha: 1).cgColor,
+        NSColor(red: 0.2, green: 1.0, blue: 0.6, alpha: 1).cgColor,
+        NSColor(red: 0.7, green: 0.2, blue: 1.0, alpha: 1).cgColor,
+    ]
+
     private var velocity = CGPoint.zero
     private let baseSpeed: CGFloat = 420.0
     private let maxSpeed: CGFloat = 900.0
@@ -14,7 +22,7 @@ class PiPongGame: GameBase {
     private var playerPaddle: NSWindow?
     private var aiPaddle: NSWindow?
 
-    private let paddleWidth: CGFloat = 8
+    private let paddleWidth: CGFloat = 10
     private let paddleMargin: CGFloat = 20
     private var paddleHeight: CGFloat = 150
 
@@ -314,9 +322,10 @@ class PiPongGame: GameBase {
     private func flashPaddle(_ paddle: NSWindow?) {
         guard let layer = paddle?.contentView?.layer else { return }
         let flash = CABasicAnimation(keyPath: "backgroundColor")
-        flash.fromValue = glowCGColor()
+        flash.fromValue = layer.backgroundColor
         flash.toValue = NSColor.white.cgColor
-        flash.duration = 0.1
+        flash.duration = 0.15
+        flash.autoreverses = true
         layer.add(flash, forKey: "hitFlash")
     }
 
@@ -402,33 +411,36 @@ class PiPongGame: GameBase {
                             y: h - screen.midY - paddleHeight / 2,
                             width: paddleWidth, height: paddleHeight))
 
-        // Score overlay
-        let scoreY = h - screen.minY - 55
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - 80, y: scoreY, width: 160, height: 44),
+        // Score overlay — wide liquid glass pill
+        let scoreW: CGFloat = 420
+        let scoreSz: CGFloat = 60
+        let scoreY = h - screen.minY - 75
+        let sw = NSWindow(contentRect: NSRect(x: screen.midX - scoreW / 2, y: scoreY, width: scoreW, height: scoreSz),
                           styleMask: .borderless, backing: .buffered, defer: false)
         sw.isOpaque = false
         sw.backgroundColor = .clear
         sw.level = .floating
         sw.ignoresMouseEvents = true
-        sw.hasShadow = false
+        sw.hasShadow = true
         sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
 
-        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 160, height: 44))
+        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: scoreW, height: scoreSz))
         vibrancy.material = .hudWindow
         vibrancy.blendingMode = .behindWindow
         vibrancy.state = .active
         vibrancy.wantsLayer = true
-        vibrancy.layer?.cornerRadius = 8
+        vibrancy.layer?.cornerRadius = scoreSz / 2
+        vibrancy.layer?.borderWidth = 0.5
+        vibrancy.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
+        vibrancy.layer?.masksToBounds = true
         sw.contentView = vibrancy
 
-        let label = NSTextField(frame: NSRect(x: 0, y: 0, width: 160, height: 44))
+        let label = NSTextField(frame: NSRect(x: 30, y: 0, width: scoreW - 60, height: scoreSz))
         label.isEditable = false
         label.isBordered = false
         label.backgroundColor = .clear
-        label.textColor = .white
-        label.font = NSFont.monospacedSystemFont(ofSize: 24, weight: .bold)
         label.alignment = .center
-        label.stringValue = "0 : 0"
+        label.attributedStringValue = scoreString("0", "0")
         vibrancy.addSubview(label)
         sw.orderFrontRegardless()
 
@@ -470,8 +482,32 @@ class PiPongGame: GameBase {
         w.hasShadow = false
         w.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
         w.contentView!.wantsLayer = true
-        w.contentView!.layer!.backgroundColor = NSColor.white.cgColor
-        w.contentView!.layer!.cornerRadius = paddleWidth / 2
+        let layer = w.contentView!.layer!
+        layer.cornerRadius = paddleWidth / 2
+
+        // Pulse-cycle background: purple → cyan → green → purple
+        layer.backgroundColor = Self.glowCycleColors[0]
+        let bgAnim = CAKeyframeAnimation(keyPath: "backgroundColor")
+        bgAnim.values = Self.glowCycleColors
+        bgAnim.keyTimes = [0, 0.33, 0.66, 1.0]
+        bgAnim.duration = 3.0
+        bgAnim.repeatCount = .infinity
+        bgAnim.calculationMode = .linear
+        layer.add(bgAnim, forKey: "glowCycle")
+
+        // Pulse-cycle shadow
+        layer.shadowOffset = .zero
+        layer.shadowRadius = 12
+        layer.shadowOpacity = 0.9
+        layer.shadowColor = Self.glowCycleColors[0]
+        let shadowAnim = CAKeyframeAnimation(keyPath: "shadowColor")
+        shadowAnim.values = Self.glowCycleColors
+        shadowAnim.keyTimes = [0, 0.33, 0.66, 1.0]
+        shadowAnim.duration = 3.0
+        shadowAnim.repeatCount = .infinity
+        shadowAnim.calculationMode = .linear
+        layer.add(shadowAnim, forKey: "shadowCycle")
+
         w.orderFrontRegardless()
         return w
     }
@@ -495,18 +531,71 @@ class PiPongGame: GameBase {
 
         // Score overlay
         if let sw = scoreOverlay {
-            let scoreY = h - screen.minY - 55
-            sw.setFrame(NSRect(x: screen.midX - 80 + shakeOffset.x,
+            let scoreY = h - screen.minY - 75
+            sw.setFrame(NSRect(x: screen.midX - 210 + shakeOffset.x,
                                y: scoreY + shakeOffset.y,
-                               width: 160, height: 44), display: true)
+                               width: 420, height: 60), display: true)
         }
+    }
+
+    // MARK: - Score Display
+
+    private func scoreString(_ left: String, _ right: String) -> NSAttributedString {
+        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
+        let dimMint = mint.withAlphaComponent(0.5)
+        let font = NSFont.monospacedSystemFont(ofSize: 36, weight: .heavy)
+        let colonFont = NSFont.monospacedSystemFont(ofSize: 28, weight: .medium)
+        let shadow = NSShadow()
+        shadow.shadowColor = mint.withAlphaComponent(0.7)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = .zero
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+
+        let result = NSMutableAttributedString()
+        result.append(NSAttributedString(string: left, attributes: [
+            .font: font, .foregroundColor: mint, .kern: 4.0,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        result.append(NSAttributedString(string: "    :    ", attributes: [
+            .font: colonFont, .foregroundColor: dimMint, .kern: 2.0,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        result.append(NSAttributedString(string: right, attributes: [
+            .font: font, .foregroundColor: mint, .kern: 4.0,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        return result
+    }
+
+    private func scoreStringMessage(_ text: String) -> NSAttributedString {
+        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
+        let font = NSFont.monospacedSystemFont(ofSize: 28, weight: .heavy)
+        let shadow = NSShadow()
+        shadow.shadowColor = mint.withAlphaComponent(0.7)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = .zero
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        return NSAttributedString(string: text, attributes: [
+            .font: font, .foregroundColor: mint, .kern: 8.0,
+            .shadow: shadow, .paragraphStyle: style,
+        ])
     }
 
     private func updateScore() {
         if let msg = matchOverMessage {
-            scoreLabel?.stringValue = msg
+            scoreLabel?.attributedStringValue = scoreStringMessage(msg)
         } else {
-            scoreLabel?.stringValue = "\(playerScore) : \(aiScore)"
+            scoreLabel?.attributedStringValue = scoreString("\(playerScore)", "\(aiScore)")
+        }
+        if let layer = scoreOverlay?.contentView?.layer {
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
+            pulse.fromValue = 1.08
+            pulse.toValue = 1.0
+            pulse.duration = 0.2
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(pulse, forKey: "scorePulse")
         }
     }
 }

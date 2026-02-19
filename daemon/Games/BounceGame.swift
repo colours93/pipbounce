@@ -81,7 +81,7 @@ class BounceGame: GameBase {
     private let paddleLength: CGFloat = 80
     private let paddleThickness: CGFloat = 6
     private let paddleBaseSpeed: CGFloat = 0.15   // starting speed (slow, easy to catch)
-    private let paddleMaxSpeed: CGFloat = 0.55     // cap at high scores
+    private let paddleMaxSpeed: CGFloat = 0.40     // cap at high scores
     private var paddleHitCooldown: UInt64 = 0
 
     // AI behavior
@@ -406,38 +406,42 @@ class BounceGame: GameBase {
     private var perimeterT: CGFloat = 0.125  // start at bottom center
 
     private func perimeterToEdge(_ t: CGFloat) -> (edge: Int, edgeT: CGFloat) {
-        let t = t - floor(t)  // normalize to 0..1
-        if t < 0.25      { return (2, t / 0.25) }           // bottom
-        else if t < 0.50  { return (1, (t - 0.25) / 0.25) } // right
-        else if t < 0.75  { return (0, 1.0 - (t - 0.50) / 0.25) } // top (reversed so it goes right-to-left)
-        else              { return (3, 1.0 - (t - 0.75) / 0.25) } // left (reversed so it goes top-to-bottom)
+        // Counter-clockwise in screen coords (y-down):
+        //   bottom (left→right) → right (bottom→top) → top (right→left) → left (top→bottom)
+        // edgeT always 0→1 in the direction of travel.
+        // Rect code maps: bottom/top edgeT→x (0=left,1=right), right/left edgeT→y (0=top,1=bottom)
+        let t = t - floor(t)
+        if t < 0.25      { return (2, t / 0.25) }                       // bottom: edgeT 0→1 = left→right
+        else if t < 0.50  { return (1, 1.0 - (t - 0.25) / 0.25) }       // right:  edgeT 1→0 = bottom→top (reversed for rect)
+        else if t < 0.75  { return (0, 1.0 - (t - 0.50) / 0.25) }       // top:    edgeT 1→0 = right→left (reversed for rect)
+        else              { return (3, (t - 0.75) / 0.25) }              // left:   edgeT 0→1 = top→bottom
     }
 
     private func pointToPerimeterT(point: CGPoint, screen: CGRect) -> CGFloat {
         // Find closest perimeter position for a point (used to compute dodge target)
+        // Must match perimeterToEdge so corners are physically continuous
         let w = screen.width
         let h = screen.height
-        let px = (point.x - screen.minX) / w
-        let py = (point.y - screen.minY) / h
+        let px = (point.x - screen.minX) / w   // 0=left, 1=right
+        let py = (point.y - screen.minY) / h   // 0=top, 1=bottom
 
-        // In our coordinate system, position.y increases downward
-        let dTop = py          // fraction from top
-        let dBot = 1.0 - py    // fraction from bottom
+        let dTop = py
+        let dBot = 1.0 - py
         let dLeft = px
         let dRight = 1.0 - px
 
         let minD = min(dTop, dBot, dLeft, dRight)
-        if minD == dBot  { return px * 0.25 }                    // bottom edge
-        if minD == dRight { return 0.25 + py * 0.25 }             // right edge
-        if minD == dTop  { return 0.50 + (1.0 - px) * 0.25 }     // top edge
-        return 0.75 + (1.0 - py) * 0.25                          // left edge
+        if minD == dBot  { return px * 0.25 }                    // bottom: left→right = 0→0.25
+        if minD == dRight { return 0.25 + (1.0 - py) * 0.25 }    // right:  bottom→top = 0.25→0.50
+        if minD == dTop  { return 0.50 + (1.0 - px) * 0.25 }     // top:    right→left = 0.50→0.75
+        return 0.75 + py * 0.25                                   // left:   top→bottom = 0.75→1.0
     }
 
     private func currentPaddleSpeed() -> CGFloat {
         // Ramps from base to max over score 0..50, plus perk level bonus
         let t = min(CGFloat(score) / 50.0, 1.0)
         let base = paddleBaseSpeed + (paddleMaxSpeed - paddleBaseSpeed) * t
-        return min(base + perkState.paddleSpeedBonus, 0.70)
+        return min(base + perkState.paddleSpeedBonus, 0.50)
     }
 
     private func currentReactionInterval() -> CGFloat {
@@ -520,7 +524,9 @@ class BounceGame: GameBase {
         if diff > 0.5 { diff -= 1.0 }
         if diff < -0.5 { diff += 1.0 }
 
-        let moveAmount = effectiveSpeed * dt
+        // Cap dt to prevent teleportation on frame drops
+        let clampedDt = min(dt, 0.033)  // never move more than ~2 frames worth
+        let moveAmount = effectiveSpeed * clampedDt
         if abs(diff) < moveAmount {
             perimeterT = reactionTarget
         } else {
@@ -587,8 +593,8 @@ class BounceGame: GameBase {
             scoreLabel?.stringValue = "\(score)"
             paddleHitCooldown = now + secondsToMach(perkState.hitCooldownSeconds)
 
-            // On hit: scramble the paddle's position a bit (it got caught, needs to recover)
-            perimeterT += CGFloat.random(in: -0.15...0.15)
+            // On hit: nudge the paddle slightly (it got caught, needs to recover)
+            perimeterT += CGFloat.random(in: -0.03...0.03)
             perimeterT = perimeterT - floor(perimeterT)
             // Force a delayed reaction to the new state
             reactionTimer = currentReactionInterval() * 1.5

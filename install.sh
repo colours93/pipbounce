@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-#  xpip Installer
+#  XPip Installer
 #  Compiles the Swift daemon, generates extension icons, and prints
 #  post-install instructions.
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ fi
 log "OK" "All prerequisites met."
 
 # ---------------------------------------------------------------------------
-#  Step 1 -- Stop any running xpip process
+#  Step 1 -- Stop any running XPip process
 # ---------------------------------------------------------------------------
 
 section "Step 1/4: Stop existing daemon"
@@ -75,9 +75,9 @@ rm -f "$LEGACY_PLIST_PATH"
 sleep 0.5
 
 if [ "$stopped_any" = true ]; then
-    log "1/4" "Stopped existing daemon agents/processes (xpip + legacy pipbounce)."
+    log "1/4" "Stopped existing daemon agents/processes (XPip + legacy PipBounce)."
 else
-    log "1/4" "No running xpip/pipbounce process found. Continuing."
+    log "1/4" "No running XPip/PipBounce process found. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'INFOPLIST'
     <key>CFBundleIdentifier</key>
     <string>com.xpip.daemon</string>
     <key>CFBundleName</key>
-    <string>xpip</string>
+    <string>XPip</string>
     <key>CFBundleExecutable</key>
     <string>xpip</string>
     <key>LSUIElement</key>
@@ -118,7 +118,7 @@ chmod +x "$BINARY"
 
 # Check for Developer ID cert first (for distribution), then dev certs, then ad-hoc
 DEVID_SIGN=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}' || true)
-SIGN_ID=$(security find-identity -v -p codesigning | grep -E "xpip Dev|pipbounce Dev" | head -1 | awk -F'"' '{print $2}' || true)
+SIGN_ID=$(security find-identity -v -p codesigning | grep -E "XPip Dev|xpip Dev|pipbounce Dev" | head -1 | awk -F'"' '{print $2}' || true)
 
 ENTITLEMENTS="$DAEMON_DIR/xpip.entitlements"
 

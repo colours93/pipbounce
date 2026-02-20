@@ -60,7 +60,7 @@ class XPipDaemon {
 
     private func finishStart() {
         installHotkey()
-        print("xpip daemon started")
+        print("XPip daemon started")
 
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .microseconds(500))

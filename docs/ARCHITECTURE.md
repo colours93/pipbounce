@@ -1,8 +1,8 @@
-# xpip — Architecture
+# XPip — Architecture
 
 ![version](https://img.shields.io/badge/version-2.0-blue) ![last updated](https://img.shields.io/badge/updated-2026--02--20-brightgreen)
 
-xpip is a macOS background daemon plus a Chrome extension that makes Picture-in-Picture windows dodge the mouse cursor and doubles as a retro arcade platform. This document covers the overall system architecture, daemon internals, and process lifecycle. For detailed treatment of the dodge algorithm and PiP detection see [DODGE-SYSTEM.md](./DODGE-SYSTEM.md); for the game engine and all thirteen game modes see [GAME-ENGINE.md](./GAME-ENGINE.md); for the glow border and sacred geometry burst system see [RGB-BORDER.md](./RGB-BORDER.md); for the HTTP API see [API-REFERENCE.md](./API-REFERENCE.md).
+XPip is a macOS background daemon plus a Chrome extension that makes Picture-in-Picture windows dodge the mouse cursor and doubles as a retro arcade platform. This document covers the overall system architecture, daemon internals, and process lifecycle. For detailed treatment of the dodge algorithm and PiP detection see [DODGE-SYSTEM.md](./DODGE-SYSTEM.md); for the game engine and all thirteen game modes see [GAME-ENGINE.md](./GAME-ENGINE.md); for the glow border and sacred geometry burst system see [RGB-BORDER.md](./RGB-BORDER.md); for the HTTP API see [API-REFERENCE.md](./API-REFERENCE.md).
 
 ---
 
@@ -21,7 +21,7 @@ All Mermaid diagrams in this documentation follow a consistent color system:
 
 ## System Architecture Overview
 
-xpip is organized into three cooperating layers that span two processes and the macOS kernel:
+XPip is organized into three cooperating layers that span two processes and the macOS kernel:
 
 1. **Chrome Extension** — A Manifest V3 extension running inside Chrome. It provides the user-visible popup UI and issues commands to the daemon over localhost HTTP. It also injects content scripts that interact with the browser's Picture-in-Picture API to enter and exit PiP mode.
 
@@ -140,7 +140,7 @@ signal(SIGTERM) { cleanup(); exit(0) }
 RunLoop.main.run()        — block forever, dispatching timers and events
 ```
 
-`NSApplication.shared` is required even though xpip is a background daemon (it has `LSUIElement = true` in its `Info.plist`). Cocoa's window and timer machinery depends on the application object being initialized. The `RunLoop.main.run()` call at the end drives both the 60 fps timer and the CGEvent tap source.
+`NSApplication.shared` is required even though XPip is a background daemon (it has `LSUIElement = true` in its `Info.plist`). Cocoa's window and timer machinery depends on the application object being initialized. The `RunLoop.main.run()` call at the end drives both the 60 fps timer and the CGEvent tap source.
 
 ### The 1/60s tick loop
 

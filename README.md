@@ -1,8 +1,8 @@
-# xpip
+# XPip
 
 **A macOS daemon + Chrome extension that makes Picture-in-Picture windows dodge your mouse cursor — and turns them into retro arcade machines.**
 
-xpip watches your cursor at 60 fps and flings PiP windows away when you approach from the side. Sneak in from a corner to interact with playback controls. Toggle an animated RGB glow border. Or launch one of 13 built-in mini-games (with 14 modes) that use the PiP window as a game object bouncing around your screen.
+XPip watches your cursor at 60 fps and flings PiP windows away when you approach from the side. Sneak in from a corner to interact with playback controls. Toggle an animated RGB glow border. Or launch one of 13 built-in mini-games (with 14 modes) that use the PiP window as a game object bouncing around your screen.
 
 ---
 
@@ -232,7 +232,7 @@ flowchart LR
 
 **Output binary:** `~/.xpip/xpip.app/Contents/MacOS/xpip`
 
-**Code signing:** Uses "xpip Dev" (or legacy "pipbounce Dev") certificate if found, otherwise ad-hoc (`codesign --sign -`)
+**Code signing:** Uses "XPip Dev" (or legacy "pipbounce Dev") certificate if found, otherwise ad-hoc (`codesign --sign -`)
 
 ```bash
 # 2. Load Chrome extension

@@ -1,6 +1,6 @@
 # RGB Border
 
-The `RGBBorder` class renders the animated glow ring that surrounds the Picture-in-Picture window at all times during xpip operation. It is also responsible for the three-tier sacred geometry burst animations that fire during gameplay events such as scoring milestones. This document covers the layer architecture, coordinate system, animation pipeline, color system, and the full burst geometry implementation.
+The `RGBBorder` class renders the animated glow ring that surrounds the Picture-in-Picture window at all times during XPip operation. It is also responsible for the three-tier sacred geometry burst animations that fire during gameplay events such as scoring milestones. This document covers the layer architecture, coordinate system, animation pipeline, color system, and the full burst geometry implementation.
 
 ---
 

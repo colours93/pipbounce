@@ -1,4 +1,4 @@
-# xpip
+# XPip
 
 macOS daemon + Chrome extension. PiP windows dodge your cursor and become retro arcade machines.
 
@@ -10,7 +10,7 @@ macOS daemon + Chrome extension. PiP windows dodge your cursor and become retro 
 bash dev.sh
 ```
 
-Compile + sign + restart. No icons, no launchd setup. Uses stable `xpip Dev` cert to preserve Accessibility TCC grant. No password prompts.
+Compile + sign + restart. No icons, no launchd setup. Uses stable `XPip Dev` cert to preserve Accessibility TCC grant. No password prompts.
 
 ### Full install
 

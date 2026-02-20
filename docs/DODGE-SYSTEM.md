@@ -1,6 +1,6 @@
 # Dodge System
 
-The xpip dodge system is the behavioral core of the daemon. It watches for a Picture-in-Picture (PiP) window, classifies every mouse entry into that window as either an intentional interaction or an accidental hover, and — when the entry looks accidental — smoothly relocates the PiP to the screen corner furthest from the cursor.
+The XPip dodge system is the behavioral core of the daemon. It watches for a Picture-in-Picture (PiP) window, classifies every mouse entry into that window as either an intentional interaction or an accidental hover, and — when the entry looks accidental — smoothly relocates the PiP to the screen corner furthest from the cursor.
 
 This document covers the full lifecycle: how PiP windows are detected and verified, how entry intent is classified, how the animation plays out, and how the target corner is chosen.
 
@@ -19,7 +19,7 @@ This document covers the full lifecycle: how PiP windows are detected and verifi
 
 ## 1. Dodge Behavior
 
-The fundamental insight behind the dodge system is that deliberate interaction with a PiP window almost always begins at a corner — the user reaches for the playback controls that browsers render there. Accidental hover, by contrast, tends to arrive from an edge or the middle of the window. xpip exploits this asymmetry: corner entry is allowed through unchanged; non-corner entry triggers an immediate relocation.
+The fundamental insight behind the dodge system is that deliberate interaction with a PiP window almost always begins at a corner — the user reaches for the playback controls that browsers render there. Accidental hover, by contrast, tends to arrive from an edge or the middle of the window. XPip exploits this asymmetry: corner entry is allowed through unchanged; non-corner entry triggers an immediate relocation.
 
 The diagram below shows the complete state machine that runs every tick (~16 ms). Each arc is labeled with the condition that drives the transition.
 

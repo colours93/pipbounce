@@ -1,6 +1,6 @@
 # Game Engine
 
-xpip's game engine is a lightweight, protocol-driven system that turns any active Picture-in-Picture window into the primary game object. There is no separate render target for the game world — the PiP window itself is the ball, the ship, the frog, or the player character, moved each tick via macOS Accessibility APIs. All decorative overlays (pipes, paddles, score HUDs, particle bursts) are transparent `NSWindow` layers rendered at `.floating` level above all other app content.
+XPip's game engine is a lightweight, protocol-driven system that turns any active Picture-in-Picture window into the primary game object. There is no separate render target for the game world — the PiP window itself is the ball, the ship, the frog, or the player character, moved each tick via macOS Accessibility APIs. All decorative overlays (pipes, paddles, score HUDs, particle bursts) are transparent `NSWindow` layers rendered at `.floating` level above all other app content.
 
 ---
 
@@ -1331,7 +1331,7 @@ None of the games install `NSEvent` global monitors or tap the event stream. All
 
 ## 7. Adding a New Game
 
-To add a new game mode to xpip:
+To add a new game mode to XPip:
 
 1. Create `daemon/Games/MyGame.swift` with a file-scope singleton `let mygame = MyGame()`.
 2. Subclass `GameBase`. Set `timerIntervalMs` at the top of `onStart()` before calling any base setup.

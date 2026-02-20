@@ -1,6 +1,6 @@
 # API Reference
 
-This document covers the complete xpip API surface: the HTTP control server exposed by the daemon, the Chrome extension architecture, the full configuration model, the macOS permission requirements, and common troubleshooting scenarios. It is intended for developers integrating with xpip or building tooling on top of it.
+This document covers the complete XPip API surface: the HTTP control server exposed by the daemon, the Chrome extension architecture, the full configuration model, the macOS permission requirements, and common troubleshooting scenarios. It is intended for developers integrating with XPip or building tooling on top of it.
 
 ---
 
@@ -280,7 +280,7 @@ flowchart LR
 
 ### Granting Permissions
 
-Navigate to **System Settings → Privacy & Security** and add `xpip` (located at `~/.xpip/xpip.app` after install) to each of the three categories:
+Navigate to **System Settings → Privacy & Security** and add `XPip` (located at `~/.xpip/xpip.app` after install) to each of the three categories:
 
 1. **Accessibility** — Required for `AXUIElement` window enumeration and position setting. The daemon checks `AXIsProcessTrusted()` on startup and logs a warning if this permission is absent. Without it the window cannot be moved.
 
@@ -296,14 +296,14 @@ After granting permissions, restart the daemon for them to take effect.
 
 | Symptom | Likely Cause | Resolution |
 |---------|-------------|-----------|
-| PiP window does not move away from cursor | Accessibility permission not granted | System Settings → Privacy & Security → Accessibility → add `xpip` |
+| PiP window does not move away from cursor | Accessibility permission not granted | System Settings → Privacy & Security → Accessibility → add `XPip` |
 | Status bar shows "Offline" immediately after install | Daemon not running or launchd plist not loaded | Run `launchctl load ~/Library/LaunchAgents/com.xpip.daemon.plist` or re-run `install.sh` |
-| Hotkey does not respond | Input Monitoring permission not granted | System Settings → Privacy & Security → Input Monitoring → add `xpip` |
-| `GET /status` returns `pipActive: false` even with a PiP window open | Screen Recording permission not granted | System Settings → Privacy & Security → Screen Recording → add `xpip` |
+| Hotkey does not respond | Input Monitoring permission not granted | System Settings → Privacy & Security → Input Monitoring → add `XPip` |
+| `GET /status` returns `pipActive: false` even with a PiP window open | Screen Recording permission not granted | System Settings → Privacy & Security → Screen Recording → add `XPip` |
 | `POST /settings` returns 404 | Request path has trailing slash or typo | Ensure path is exactly `/settings` with no trailing slash |
 | Game does not start; popup button stays in idle state | PiP window not open when game POST is sent | The popup calls `enterPip()` before the game POST; confirm the active tab has a playable video element |
 | Settings reset after restarting daemon | Settings are in-memory only by design | Settings are not persisted; re-apply via `POST /settings` or the popup UI after each restart |
-| Alt+P hotkey does not enter PiP | Extension shortcut may be overridden by another extension | Navigate to `chrome://extensions/shortcuts` and reassign the `toggle-pip` command for xpip |
+| Alt+P hotkey does not enter PiP | Extension shortcut may be overridden by another extension | Navigate to `chrome://extensions/shortcuts` and reassign the `toggle-pip` command for XPip |
 | `autopip.js` does not enter PiP on tab switch | Page video has `disablePictureInPicture` attribute or is paused | The auto-PiP handler only selects non-paused videos without the `disablePictureInPicture` attribute; no workaround without page-level change |
 | Daemon restarts but settings differ from before | Expected: settings reset on restart | All settings are defaults after restart; apply desired configuration via `POST /settings` |
 | `bounce-paddle` and `bounce` both map to `"bounce"` key in response | By design — they share the same game instance | Use the `bounce` field in the response to read state for both variants |

@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-let pipong = PiPongGame()
+
 
 /// PiPong — classic mode where the PiP window IS the ball.
 /// Both paddles are overlay windows. Player controls left paddle with mouse Y.
@@ -53,12 +53,23 @@ class PiPongGame: GameBase {
     private var rallyStartMach: UInt64 = 0
     private let speedRampDuration: CGFloat = 15.0
 
-    // Ball trail
+    // Galactic shooting star trail
     private var trailWindow: NSWindow?
-    private var trailLayers: [CALayer] = []
-    private var trailPositions: [CGPoint] = []
-    private var trailFrameCounter = 0
-    private let trailCount = 3
+    private struct Particle {
+        var layer: CALayer
+        var x: CGFloat
+        var y: CGFloat
+        var vx: CGFloat
+        var vy: CGFloat
+        var life: CGFloat      // 1.0 → 0.0
+        var maxLife: CGFloat
+        var size: CGFloat
+        var hue: CGFloat       // for RGB cycling
+        var twinkleRate: CGFloat
+    }
+    private var particles: [Particle] = []
+    private let maxParticles = 80
+    private var trailHue: CGFloat = 0
 
     // Screen shake
     private var shakeFramesRemaining = 0
@@ -79,9 +90,7 @@ class PiPongGame: GameBase {
         matchOverUntil = 0
         matchOverMessage = nil
         rallyStartMach = mach_absolute_time()
-        trailLayers = []
-        trailPositions = []
-        trailFrameCounter = 0
+        particles = []
         shakeFramesRemaining = 0
 
         // PiP IS the ball — start at center
@@ -112,8 +121,7 @@ class PiPongGame: GameBase {
         playerPaddle = nil
         aiPaddle = nil
         trailWindow = nil
-        trailLayers = []
-        trailPositions = []
+        particles = []
         print("PiPong stopped")
     }
 
@@ -134,12 +142,11 @@ class PiPongGame: GameBase {
         // Match over pause
         if matchOverUntil > 0 {
             if now < matchOverUntil {
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                updateOverlayPositions(screen: screen)
-                let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
-                syncBorder(around: pipBounds)
-                CATransaction.commit()
+                withTransaction {
+                    updateOverlayPositions(screen: screen)
+                    let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
+                    syncBorder(around: pipBounds)
+                }
                 return
             }
             matchOverUntil = 0
@@ -151,13 +158,12 @@ class PiPongGame: GameBase {
 
         // Pause after score
         if pauseUntil > 0 {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            updateOverlayPositions(screen: screen)
-            let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
-            syncBorder(around: pipBounds)
-            if scoreChanged { updateScore(); scoreChanged = false }
-            CATransaction.commit()
+            withTransaction {
+                updateOverlayPositions(screen: screen)
+                let pipBounds = CGRect(origin: ballPos, size: cachedPipSize)
+                syncBorder(around: pipBounds)
+                if scoreChanged { updateScore(); scoreChanged = false }
+            }
             if now < pauseUntil { return }
             pauseUntil = 0
             rallyStartMach = now
@@ -281,14 +287,12 @@ class PiPongGame: GameBase {
 
         let pipBounds = CGRect(origin: movedPos, size: cachedPipSize)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        updateOverlayPositions(screen: screen, shakeOffset: shakeOff)
-        syncBorder(around: pipBounds)
-        updateTrail(shakeOffset: shakeOff, screen: screen)
-        if scoreChanged { updateScore(); scoreChanged = false }
-        CATransaction.commit()
+        withTransaction {
+            updateOverlayPositions(screen: screen, shakeOffset: shakeOff)
+            syncBorder(around: pipBounds)
+            updateTrail(shakeOffset: shakeOff, screen: screen, dt: dt)
+            if scoreChanged { updateScore(); scoreChanged = false }
+        }
     }
 
     // MARK: - AI Difficulty
@@ -355,39 +359,95 @@ class PiPongGame: GameBase {
 
     // MARK: - Ball Trail
 
-    private func updateTrail(shakeOffset: CGPoint, screen: CGRect) {
+    private func updateTrail(shakeOffset: CGPoint, screen: CGRect, dt: CGFloat = 0.008) {
         guard let tw = trailWindow else { return }
 
         tw.setFrame(NSRect(x: screen.minX, y: screenH - screen.maxY,
                            width: screen.width, height: screen.height), display: false)
 
-        trailFrameCounter += 1
-        if trailFrameCounter >= 2 {
-            trailFrameCounter = 0
-            trailPositions.insert(CGPoint(x: ballPos.x + cachedPipSize.width / 2,
-                                           y: ballPos.y + cachedPipSize.height / 2), at: 0)
-            if trailPositions.count > trailCount + 2 {
-                trailPositions.removeLast()
+        trailHue += 0.75 * dt
+        if trailHue > 1.0 { trailHue -= 1.0 }
+
+        let pw = cachedPipSize.width
+        let ph = cachedPipSize.height
+
+        // Spawn from the TRAILING EDGE of the PiP — opposite to velocity
+        // If moving right → spawn along left edge, if moving up → spawn along bottom edge
+        let spawnCount = min(4, maxParticles - particles.count)
+        for j in 0..<spawnCount {
+            let isSparkle = j >= 2
+            let sz: CGFloat = isSparkle ? CGFloat.random(in: 0.8...1.5) : CGFloat.random(in: 2.0...3.5)
+            let lifeSpan: CGFloat = isSparkle ? CGFloat.random(in: 0.5...0.8) : CGFloat.random(in: 0.8...1.0)
+            let particleHue = (trailHue + CGFloat.random(in: -0.05...0.05)).truncatingRemainder(dividingBy: 1.0)
+
+            // Determine spawn position along trailing edge
+            var sx: CGFloat
+            var sy: CGFloat
+            if abs(velocity.x) > abs(velocity.y) {
+                // Primarily horizontal — spawn along trailing vertical edge
+                sx = velocity.x > 0 ? ballPos.x : ballPos.x + pw
+                sy = ballPos.y + CGFloat.random(in: 0...ph)
+            } else {
+                // Primarily vertical — spawn along trailing horizontal edge
+                sx = ballPos.x + CGFloat.random(in: 0...pw)
+                sy = velocity.y > 0 ? ballPos.y : ballPos.y + ph
             }
+            // Small jitter off the edge
+            let jitter: CGFloat = isSparkle ? CGFloat.random(in: -4...4) : CGFloat.random(in: -1.5...1.5)
+            sx += jitter
+            sy += jitter
+
+            let dot = layerPool.dequeue()
+            dot.backgroundColor = NSColor(hue: particleHue, saturation: 0.85,
+                                           brightness: 1.0, alpha: 1.0).cgColor
+            dot.cornerRadius = sz / 2
+            tw.contentView!.layer!.addSublayer(dot)
+
+            particles.append(Particle(
+                layer: dot,
+                x: sx,
+                y: sy,
+                vx: 0, vy: 0,
+                life: lifeSpan,
+                maxLife: lifeSpan,
+                size: sz,
+                hue: particleHue,
+                twinkleRate: isSparkle ? CGFloat.random(in: 10...25) : 0
+            ))
         }
 
-        let dotSize: CGFloat = min(cachedPipSize.width, cachedPipSize.height) * 0.4
-        let color = glowCGColor()
-
-        for i in 0..<trailLayers.count {
-            let posIdx = i + 1
-            if posIdx < trailPositions.count {
-                let p = trailPositions[posIdx]
-                let cx = p.x - screen.minX + shakeOffset.x - dotSize / 2
-                let cy = p.y - screen.minY + shakeOffset.y - dotSize / 2
-                let sz = dotSize * (1.0 - CGFloat(i + 1) * 0.15)
-                trailLayers[i].frame = CGRect(x: cx + (dotSize - sz) / 2,
-                                               y: screen.height - cy - dotSize + (dotSize - sz) / 2,
-                                               width: sz, height: sz)
-                trailLayers[i].cornerRadius = sz / 2
-                trailLayers[i].backgroundColor = color
-                trailLayers[i].opacity = Float(1.0 - CGFloat(i + 1) * 0.25)
+        // Render — particles are stationary, they just fade and shrink in place
+        var i = 0
+        while i < particles.count {
+            particles[i].life -= dt * 2.5
+            if particles[i].life <= 0 {
+                layerPool.enqueue(particles[i].layer)
+                particles[i].layer.removeFromSuperlayer()
+                particles.remove(at: i)
+                continue
             }
+            let p = particles[i]
+            let t = p.life / p.maxLife
+
+            let sx = p.x - screen.minX + shakeOffset.x
+            let sy = screen.height - (p.y - screen.minY + shakeOffset.y)
+            let renderSize = p.size * (0.2 + 0.8 * t)
+            particles[i].layer.frame = CGRect(x: sx - renderSize / 2, y: sy - renderSize / 2,
+                                               width: renderSize, height: renderSize)
+            particles[i].layer.cornerRadius = renderSize / 2
+
+            var alpha = t * 0.9
+            if p.twinkleRate > 0 {
+                alpha *= sin(p.life * p.twinkleRate * .pi) * 0.3 + 0.7
+            }
+            particles[i].layer.opacity = Float(alpha)
+
+            let agingSat = max(0.15, 0.85 * t)
+            particles[i].layer.backgroundColor = NSColor(
+                hue: (p.hue + (1.0 - t) * 0.1).truncatingRemainder(dividingBy: 1.0),
+                saturation: agingSat, brightness: 0.6 + 0.4 * t, alpha: 1.0).cgColor
+
+            i += 1
         }
     }
 
@@ -411,41 +471,9 @@ class PiPongGame: GameBase {
                             y: h - screen.midY - paddleHeight / 2,
                             width: paddleWidth, height: paddleHeight))
 
-        // Score overlay — wide liquid glass pill
-        let scoreW: CGFloat = 420
-        let scoreSz: CGFloat = 60
-        let scoreY = h - screen.minY - 75
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - scoreW / 2, y: scoreY, width: scoreW, height: scoreSz),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        sw.isOpaque = false
-        sw.backgroundColor = .clear
-        sw.level = .floating
-        sw.ignoresMouseEvents = true
-        sw.hasShadow = true
-        sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-
-        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: scoreW, height: scoreSz))
-        vibrancy.material = .hudWindow
-        vibrancy.blendingMode = .behindWindow
-        vibrancy.state = .active
-        vibrancy.wantsLayer = true
-        vibrancy.layer?.cornerRadius = scoreSz / 2
-        vibrancy.layer?.borderWidth = 0.5
-        vibrancy.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
-        vibrancy.layer?.masksToBounds = true
-        sw.contentView = vibrancy
-
-        let label = NSTextField(frame: NSRect(x: 30, y: 0, width: scoreW - 60, height: scoreSz))
-        label.isEditable = false
-        label.isBordered = false
-        label.backgroundColor = .clear
-        label.alignment = .center
-        label.attributedStringValue = scoreString("0", "0")
-        vibrancy.addSubview(label)
-        sw.orderFrontRegardless()
-
-        scoreOverlay = sw
-        scoreLabel = label
+        // Score overlay — shared liquid glass pill
+        createScoreOverlay(screen: screen, width: 160)
+        scoreLabel?.attributedStringValue = Self.styledVersusScore("0", "0")
 
         // Trail window
         let tw = NSWindow(contentRect: NSRect(x: screen.minX, y: h - screen.maxY,
@@ -453,22 +481,13 @@ class PiPongGame: GameBase {
                           styleMask: .borderless, backing: .buffered, defer: false)
         tw.isOpaque = false
         tw.backgroundColor = .clear
-        tw.level = .floating
+        tw.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 2)
         tw.ignoresMouseEvents = true
         tw.hasShadow = false
         tw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
         tw.contentView!.wantsLayer = true
 
-        trailLayers = []
-        trailPositions = []
-        trailFrameCounter = 0
-        for _ in 0..<trailCount {
-            let dot = CALayer()
-            dot.opacity = 0
-            tw.contentView!.layer!.addSublayer(dot)
-            trailLayers.append(dot)
-        }
-
+        particles = []
         tw.orderFrontRegardless()
         trailWindow = tw
     }
@@ -540,62 +559,12 @@ class PiPongGame: GameBase {
 
     // MARK: - Score Display
 
-    private func scoreString(_ left: String, _ right: String) -> NSAttributedString {
-        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
-        let dimMint = mint.withAlphaComponent(0.5)
-        let font = NSFont.monospacedSystemFont(ofSize: 36, weight: .heavy)
-        let colonFont = NSFont.monospacedSystemFont(ofSize: 28, weight: .medium)
-        let shadow = NSShadow()
-        shadow.shadowColor = mint.withAlphaComponent(0.7)
-        shadow.shadowBlurRadius = 12
-        shadow.shadowOffset = .zero
-        let style = NSMutableParagraphStyle()
-        style.alignment = .center
-
-        let result = NSMutableAttributedString()
-        result.append(NSAttributedString(string: left, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 4.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-        result.append(NSAttributedString(string: "    :    ", attributes: [
-            .font: colonFont, .foregroundColor: dimMint, .kern: 2.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-        result.append(NSAttributedString(string: right, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 4.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-        return result
-    }
-
-    private func scoreStringMessage(_ text: String) -> NSAttributedString {
-        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
-        let font = NSFont.monospacedSystemFont(ofSize: 28, weight: .heavy)
-        let shadow = NSShadow()
-        shadow.shadowColor = mint.withAlphaComponent(0.7)
-        shadow.shadowBlurRadius = 12
-        shadow.shadowOffset = .zero
-        let style = NSMutableParagraphStyle()
-        style.alignment = .center
-        return NSAttributedString(string: text, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 8.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ])
-    }
-
     private func updateScore() {
         if let msg = matchOverMessage {
-            scoreLabel?.attributedStringValue = scoreStringMessage(msg)
+            scoreLabel?.attributedStringValue = Self.styledMessage(msg)
         } else {
-            scoreLabel?.attributedStringValue = scoreString("\(playerScore)", "\(aiScore)")
+            scoreLabel?.attributedStringValue = Self.styledVersusScore("\(playerScore)", "\(aiScore)")
         }
-        if let layer = scoreOverlay?.contentView?.layer {
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.08
-            pulse.toValue = 1.0
-            pulse.duration = 0.2
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(pulse, forKey: "scorePulse")
-        }
+        pulseScoreOverlay()
     }
 }

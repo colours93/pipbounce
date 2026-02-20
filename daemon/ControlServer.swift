@@ -3,6 +3,7 @@ import Foundation
 class ControlServer {
     private let port: UInt16 = 51789
     private var serverSocket: Int32 = -1
+    private let clientQueue = DispatchQueue(label: "com.pipbounce.clients", attributes: .concurrent)
 
     func start() {
         DispatchQueue.global(qos: .utility).async { [self] in
@@ -36,7 +37,9 @@ class ControlServer {
             while true {
                 let client = accept(serverSocket, nil, nil)
                 guard client >= 0 else { continue }
-                handleClient(client)
+                clientQueue.async { [self] in
+                    self.handleClient(client)
+                }
             }
         }
     }
@@ -44,7 +47,11 @@ class ControlServer {
     private func handleClient(_ fd: Int32) {
         defer { close(fd) }
 
-        var buffer = [UInt8](repeating: 0, count: 4096)
+        // Set 2-second read timeout
+        var tv = timeval(tv_sec: 2, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+
+        var buffer = [UInt8](repeating: 0, count: 8192)
         let n = read(fd, &buffer, buffer.count)
         guard n > 0 else { return }
 
@@ -78,39 +85,43 @@ class ControlServer {
         write(fd, resp, resp.utf8.count)
     }
 
+    private func toggleOnMain(_ game: MiniGame) {
+        let sema = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async { daemon.toggleGame(game); sema.signal() }
+        sema.wait()
+    }
+
     private func routeRequest(firstLine: String, body: String) -> String? {
         if firstLine.contains("GET /status") {
-            let pip = findPipWindow()
-            return "{\"enabled\":\(settings.enabled),"
-                + "\"cooldown\":\(settings.cooldown),"
-                + "\"margin\":\(Int(settings.margin)),"
-                + "\"cornerSize\":\(Int(settings.cornerSize)),"
-                + "\"glow\":\(settings.glow),"
-                + "\"glowColor\":\"\(settings.glowColor)\","
-                + "\"hotkeyCode\":\(settings.hotkeyCode),"
-                + "\"hotkeyFlags\":\(settings.hotkeyFlags),"
-                + "\"pipong\":\(pipong.active),"
-                + "\"pipong2\":\(pipong2.active),"
-                + "\"flappy\":\(flappy.active),"
-                + "\"bounce\":\(bounce.active),"
-                + "\"bounceAuto\":\(bounce.active && !bounce.paddleMode),"
-                + "\"bouncePaddle\":\(bounce.active && bounce.paddleMode),"
-                + "\"invaders\":\(invaders.active),"
-                + "\"frogger\":\(frogger.active),"
-                + "\"runner\":\(runner.active),"
-                + "\"snake\":\(snake.active),"
-                + "\"breakout\":\(breakout.active),"
-                + "\"asteroids\":\(asteroids.active),"
-                + "\"cursorhunt\":\(cursorhunt.active),"
-                + "\"doodlejump\":\(doodlejump.active),"
-                + "\"pacman\":\(pacman.active),"
-                + "\"pipActive\":\(pip != nil)}"
-        }
-
-        if firstLine.contains("GET /debug") {
-            let result = debugPipDiscovery()
+            var result = ""
+            let sema = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                let pip = findPipWindow()
+                let bounce = Games.bounce
+                var parts = [
+                    "\"enabled\":\(settings.enabled)",
+                    "\"cooldown\":\(settings.cooldown)",
+                    "\"margin\":\(Int(settings.margin))",
+                    "\"cornerSize\":\(Int(settings.cornerSize))",
+                    "\"glow\":\(settings.glow)",
+                    "\"glowColor\":\"\(settings.glowColor)\"",
+                    "\"hotkeyCode\":\(settings.hotkeyCode)",
+                    "\"hotkeyFlags\":\(settings.hotkeyFlags)",
+                ]
+                for (name, game) in Games.all {
+                    parts.append("\"\(name)\":\(game.active)")
+                }
+                parts.append("\"bounceAuto\":\(bounce.active && !bounce.paddleMode)")
+                parts.append("\"bouncePaddle\":\(bounce.active && bounce.paddleMode)")
+                parts.append("\"pipActive\":\(pip != nil)")
+                result = "{\(parts.joined(separator: ","))}"
+                sema.signal()
+            }
+            sema.wait()
             return result
         }
+
+        if firstLine.contains("GET /debug") { return debugPipDiscovery() }
 
         if firstLine.contains("POST /toggle") {
             settings.enabled.toggle()
@@ -119,129 +130,35 @@ class ControlServer {
         }
 
         if firstLine.contains("POST /restart") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                cleanup()
-                exit(0)
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { cleanup(); exit(0) }
             return "{\"restarting\":true}"
         }
 
-        if firstLine.contains("POST /pipong2") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                daemon.toggleGame(pipong2)
-                sema.signal()
-            }
-            sema.wait()
-            return "{\"pipong2\":\(pipong2.active)}"
-        }
-
-        if firstLine.contains("POST /pipong") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                daemon.toggleGame(pipong)
-                sema.signal()
-            }
-            sema.wait()
-            return "{\"pipong\":\(pipong.active)}"
-        }
-
-        if firstLine.contains("POST /flappy") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                daemon.toggleGame(flappy)
-                sema.signal()
-            }
-            sema.wait()
-            return "{\"flappy\":\(flappy.active)}"
-        }
-
+        // Bounce has special paddle-mode handling
         if firstLine.contains("POST /bounce-paddle") {
+            let bounce = Games.bounce
             let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                bounce.paddleMode = true
-                daemon.toggleGame(bounce)
-                sema.signal()
-            }
+            DispatchQueue.main.async { bounce.paddleMode = true; daemon.toggleGame(bounce); sema.signal() }
             sema.wait()
             return "{\"bouncePaddle\":\(bounce.active)}"
         }
-
         if firstLine.contains("POST /bounce") {
+            let bounce = Games.bounce
             let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                bounce.paddleMode = false
-                daemon.toggleGame(bounce)
-                sema.signal()
-            }
+            DispatchQueue.main.async { bounce.paddleMode = false; daemon.toggleGame(bounce); sema.signal() }
             sema.wait()
             return "{\"bounceAuto\":\(bounce.active)}"
         }
 
-        if firstLine.contains("POST /invaders") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async {
-                daemon.toggleGame(invaders)
-                sema.signal()
+        // Generic game toggle: match "POST /<name>" against registry
+        // Check pipong2 before pipong so "/pipong2" doesn't match "/pipong"
+        let orderedKeys = Games.all.keys.sorted { $0.count > $1.count }
+        for name in orderedKeys {
+            if name == "bounce" { continue } // handled above
+            if firstLine.contains("POST /\(name)"), let game = Games.all[name] {
+                toggleOnMain(game)
+                return "{\"\(name)\":\(game.active)}"
             }
-            sema.wait()
-            return "{\"invaders\":\(invaders.active)}"
-        }
-
-        if firstLine.contains("POST /frogger") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(frogger); sema.signal() }
-            sema.wait()
-            return "{\"frogger\":\(frogger.active)}"
-        }
-
-        if firstLine.contains("POST /runner") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(runner); sema.signal() }
-            sema.wait()
-            return "{\"runner\":\(runner.active)}"
-        }
-
-        if firstLine.contains("POST /snake") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(snake); sema.signal() }
-            sema.wait()
-            return "{\"snake\":\(snake.active)}"
-        }
-
-        if firstLine.contains("POST /breakout") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(breakout); sema.signal() }
-            sema.wait()
-            return "{\"breakout\":\(breakout.active)}"
-        }
-
-        if firstLine.contains("POST /asteroids") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(asteroids); sema.signal() }
-            sema.wait()
-            return "{\"asteroids\":\(asteroids.active)}"
-        }
-
-        if firstLine.contains("POST /cursorhunt") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(cursorhunt); sema.signal() }
-            sema.wait()
-            return "{\"cursorhunt\":\(cursorhunt.active)}"
-        }
-
-        if firstLine.contains("POST /doodlejump") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(doodlejump); sema.signal() }
-            sema.wait()
-            return "{\"doodlejump\":\(doodlejump.active)}"
-        }
-
-        if firstLine.contains("POST /pacman") {
-            let sema = DispatchSemaphore(value: 0)
-            DispatchQueue.main.async { daemon.toggleGame(pacman); sema.signal() }
-            sema.wait()
-            return "{\"pacman\":\(pacman.active)}"
         }
 
         if firstLine.contains("POST /settings") {

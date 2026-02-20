@@ -30,7 +30,7 @@ section()  { printf "\n--- %s %s\n" "$1" "$(printf '%*s' $((60 - ${#1})) '' | tr
 
 section "Pre-flight"
 
-SWIFT_FILES=("$DAEMON_DIR"/*.swift "$DAEMON_DIR"/Games/*.swift)
+SWIFT_FILES=("$DAEMON_DIR"/*.swift "$DAEMON_DIR"/Games/*.swift "$DAEMON_DIR"/Games/Sprites/*.swift)
 if [ ${#SWIFT_FILES[@]} -eq 0 ]; then
     bail "No Swift source files found in $DAEMON_DIR"
 fi
@@ -100,15 +100,44 @@ swiftc "${SWIFT_FILES[@]}" \
     -O
 
 chmod +x "$BINARY"
+
+# Check for Developer ID cert first (for distribution), then dev certs, then ad-hoc
+DEVID_SIGN=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}' || true)
 SIGN_ID=$(security find-identity -v -p codesigning | grep -E "pipbounce Dev|xpip Dev" | head -1 | awk -F'"' '{print $2}' || true)
-if [ -n "$SIGN_ID" ]; then
-    codesign --force --sign "$SIGN_ID" "$APP_BUNDLE"
-    log_ok "Signed with stable identity: $SIGN_ID"
+
+ENTITLEMENTS="$DAEMON_DIR/pipbounce.entitlements"
+
+if [ -n "$DEVID_SIGN" ]; then
+    codesign --force --options runtime \
+             --entitlements "$ENTITLEMENTS" \
+             --sign "$DEVID_SIGN" "$APP_BUNDLE"
+    log_ok "Signed with Developer ID (hardened runtime): $DEVID_SIGN"
+elif [ -n "$SIGN_ID" ]; then
+    codesign --force --options runtime \
+             --entitlements "$ENTITLEMENTS" \
+             --sign "$SIGN_ID" "$APP_BUNDLE"
+    log_ok "Signed with dev identity (hardened runtime): $SIGN_ID"
 else
     codesign --force --sign - "$APP_BUNDLE"
     log_ok "Signed ad-hoc (run install once to create stable cert)"
 fi
+
+# Optional notarization (run with NOTARIZE=1 APPLE_ID=... TEAM_ID=... APP_PASSWORD=...)
+if [ "${NOTARIZE:-0}" = "1" ]; then
+    log "2/4" "Notarizing..."
+    BUNDLE_ZIP="$INSTALL_DIR/pipbounce-notarize.zip"
+    ditto -c -k --keepParent "$APP_BUNDLE" "$BUNDLE_ZIP"
+    xcrun notarytool submit "$BUNDLE_ZIP" \
+        --apple-id "${APPLE_ID:?Set APPLE_ID for notarization}" \
+        --team-id "${TEAM_ID:?Set TEAM_ID for notarization}" \
+        --password "${APP_PASSWORD:?Set APP_PASSWORD for notarization}" \
+        --wait
+    xcrun stapler staple "$APP_BUNDLE"
+    rm -f "$BUNDLE_ZIP"
+    log_ok "Notarization complete and stapled."
+fi
 log_ok "Built $APP_BUNDLE"
+log_ok "Binary: $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$BINARY")"
 
 # ---------------------------------------------------------------------------
 #  Step 3 -- Generate extension icons
@@ -207,8 +236,53 @@ else
     log "4/4" "Launchd agent installed. Start manually: launchctl load $PLIST_PATH"
 fi
 
-# Open System Settings to Accessibility pane so user can grant permission
-open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" 2>/dev/null || true
+# Accessibility settings are now handled by the onboarding window on first launch.
+
+# ---------------------------------------------------------------------------
+#  Optional: Build .dmg (run with DMG=1)
+# ---------------------------------------------------------------------------
+
+if [ "${DMG:-0}" = "1" ]; then
+    section "Building .dmg"
+
+    DMG_STAGING="$INSTALL_DIR/dmg-staging"
+    rm -rf "$DMG_STAGING"
+    mkdir -p "$DMG_STAGING"
+
+    # Copy app bundle
+    cp -R "$APP_BUNDLE" "$DMG_STAGING/pipbounce.app"
+
+    # Copy extension
+    cp -R "$EXTENSION_DIR" "$DMG_STAGING/extension"
+
+    # Create README
+    cat > "$DMG_STAGING/README.txt" << 'READMEEOF'
+PipBounce — Setup Instructions
+
+1. Drag pipbounce.app to your preferred location (e.g. /Applications)
+   or double-click to run from here.
+
+2. On first launch, PipBounce will ask for Accessibility permission.
+   Follow the on-screen instructions.
+
+3. Load the Chrome extension:
+   a. Open chrome://extensions
+   b. Enable "Developer mode" (top-right toggle)
+   c. Click "Load unpacked" and select the "extension" folder
+
+The menu bar icon (PB) lets you toggle dodge/glow, launch games,
+restart, or uninstall.
+READMEEOF
+
+    DMG_PATH="$SCRIPT_DIR/PipBounce.dmg"
+    rm -f "$DMG_PATH"
+    hdiutil create -volname "PipBounce" \
+        -srcfolder "$DMG_STAGING" \
+        -ov -format UDZO \
+        "$DMG_PATH"
+    rm -rf "$DMG_STAGING"
+    log_ok "Built $DMG_PATH"
+fi
 
 # ---------------------------------------------------------------------------
 #  Done -- print setup instructions
@@ -222,7 +296,8 @@ printf "\n"
 printf "NEXT STEPS\n"
 printf "\n"
 printf "  1. Grant Accessibility permission (if not already done)\n"
-printf "     System Settings -> Privacy & Security -> Accessibility\n"
+printf "     The onboarding window will guide you on first launch,\n"
+printf "     or: System Settings -> Privacy & Security -> Accessibility\n"
 printf "     Click \"+\" and add:  %s\n" "$APP_BUNDLE"
 printf "\n"
 printf "  2. Load the Chrome extension\n"
@@ -231,8 +306,6 @@ printf "     b. Enable \"Developer mode\" (top-right toggle)\n"
 printf "     c. Click \"Load unpacked\" and select:\n"
 printf "        %s\n" "$EXTENSION_DIR"
 printf "\n"
-printf "  The daemon starts automatically on login and restarts each\n"
-printf "  time you open the extension popup. Logs: %s/pipbounce.log\n" "$INSTALL_DIR"
-printf "\n"
-printf "  To stop:  launchctl bootout gui/\$(id -u)/com.pipbounce.daemon\n"
+printf "  The menu bar icon lets you control PipBounce.\n"
+printf "  Logs: %s/pipbounce.log\n" "$INSTALL_DIR"
 printf "\n"

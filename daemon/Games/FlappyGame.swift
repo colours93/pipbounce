@@ -1,100 +1,52 @@
 import Cocoa
 import ApplicationServices
 
-let flappy = FlappyGame()
-
 class FlappyGame: GameBase {
 
-    // Physics
-    private var velocity: CGFloat = 0
-    private let gravity: CGFloat = 900
-    private let flapImpulse: CGFloat = -360
-    private let maxFallSpeed: CGFloat = 700
+    private enum Config {
+        static let gravity: CGFloat = 900
+        static let flapImpulse: CGFloat = -360
+        static let maxFallSpeed: CGFloat = 700
+        static let pipeBodyWidth: CGFloat = 56
+        static let pipeCapWidth: CGFloat = 70
+        static let pipeCapHeight: CGFloat = 28
+        static let baseScrollSpeed: CGFloat = 200
+        static let maxScrollSpeed: CGFloat = 350
+        static let bobDivisor: Double = 200_000_000
+    }
 
-    // Bird position (AX coords)
+    private enum Phase { case idle, flying, dead }
+
+    private var phase: Phase = .idle
+    private var velocity: CGFloat = 0
     private var birdX: CGFloat = 0
     private var birdY: CGFloat = 0
 
-    // Pipes
     private struct PipePair {
-        let topWindow: NSWindow
-        let bottomWindow: NSWindow
+        let topBody: CALayer
+        let topCap: CALayer
+        let bottomBody: CALayer
+        let bottomCap: CALayer
         var x: CGFloat
         let gapCenterY: CGFloat
         var scored: Bool
     }
     private var pipes: [PipePair] = []
-    private let pipeBodyWidth: CGFloat = 56
-    private let pipeCapWidth: CGFloat = 70
-    private let pipeCapHeight: CGFloat = 28
+    private var pipeOverlay: NSWindow?
+    private var pipeRootLayer: CALayer?
     private var pipeGap: CGFloat = 200
     private var pipeInterval: CGFloat = 260
-    private let baseScrollSpeed: CGFloat = 200
-    private let maxScrollSpeed: CGFloat = 350
-
-    // Pixel-art sprites
-    private enum Sprites {
-        // Palette
-        private static let H: UInt32 = 0x8ED43C  // highlight green
-        private static let L: UInt32 = 0x5FA316  // light green
-        private static let M: UInt32 = 0x4E8C12  // medium green
-        private static let D: UInt32 = 0x33660A  // dark green (shadow/edge)
-        private static let B: UInt32 = 0x264D08  // border dark
-        private static let O: UInt32 = 0          // transparent
-
-        // Pipe cap 22x8: wider cap with lip, highlight top, shadow bottom, dark edges
-        static let pipeCap: [[UInt32]] = [
-            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
-            [B,D,H,H,H,L,L,L,L,L,L,L,L,L,L,L,L,L,H,H,D,B],
-            [B,D,H,H,L,L,L,L,L,L,L,L,L,L,L,L,L,L,L,H,D,B],
-            [B,D,L,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,L,D,B],
-            [B,D,L,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,L,D,B],
-            [B,D,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,M,D,B],
-            [B,D,D,D,M,M,M,M,M,M,M,M,M,M,M,M,M,M,D,D,D,B],
-            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
-        ]
-
-        // Pipe body 18x8: tiled vertically, left shadow, right highlight, brick lines
-        static let pipeBody: [[UInt32]] = [
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-            [B,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,B],
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-            [B,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,D,B],
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-            [B,D,D,M,M,M,M,M,M,M,M,M,M,M,M,L,H,B],
-        ]
-
-        static let pipeCapImage: CGImage? = renderPixelArt(pipeCap, scale: 3)
-        static let pipeBodyImage: CGImage? = renderPixelArt(pipeBody, scale: 3)
-
-        private static func renderPixelArt(_ pixels: [[UInt32]], scale: Int) -> CGImage? {
-            GameBase.renderPixelArt(pixels, scale: scale)
-        }
-    }
-
-    // Scoring
     private var bestScore = 0
-
-    // Input
     private var wasMouseDown = false
-
-    // Wobble (border glow only — can't rotate Chrome's window)
     private var tiltAngle: CGFloat = 0
-
-    // Death overlay (Dark Souls "YOU DIED")
     private var deathOverlay: NSWindow?
-
-    // Game state
-    private var started = false
 
     override func onStart(screen: CGRect, pip: PipWindowInfo) {
         timerIntervalMs = 4
 
         velocity = 0
-        gameOver = false
-        started = false
+        state = .playing
+        phase = .idle
         tiltAngle = 0
         wasMouseDown = false
         pipes = []
@@ -127,34 +79,37 @@ class FlappyGame: GameBase {
             AXUIElementSetAttributeValue(pip.axWindow, kAXPositionAttribute as CFString, val)
         }
 
-        if Thread.isMainThread {
-            createScoreOverlay(screen: screen, width: 120)
-        } else {
-            DispatchQueue.main.sync { self.createScoreOverlay(screen: screen, width: 120) }
+        onMain {
+            let (ow, root) = self.createFullscreenOverlay(screen: screen)
+            self.pipeOverlay = ow
+            self.pipeRootLayer = root
+            self.createScoreOverlay(screen: screen, width: 100)
         }
 
         print("Flappy started")
     }
 
     override func onStop() {
-        started = false
-
+        phase = .idle
         borderRef?.rotationPadding = 0
 
-        let pipeList = pipes
+        for p in pipes {
+            p.topBody.removeFromSuperlayer()
+            p.topCap.removeFromSuperlayer()
+            p.bottomBody.removeFromSuperlayer()
+            p.bottomCap.removeFromSuperlayer()
+        }
+        pipes = []
+
+        let po = pipeOverlay
         let dw = deathOverlay
-        let doCleanup = {
-            for p in pipeList {
-                p.topWindow.orderOut(nil)
-                p.bottomWindow.orderOut(nil)
-            }
+        onMain {
+            po?.orderOut(nil)
             dw?.orderOut(nil)
         }
+        pipeOverlay = nil
+        pipeRootLayer = nil
         deathOverlay = nil
-        if Thread.isMainThread { doCleanup() }
-        else { DispatchQueue.main.async { doCleanup() } }
-
-        pipes = []
         print("Flappy stopped")
     }
 
@@ -168,7 +123,7 @@ class FlappyGame: GameBase {
         let dt = deltaTime()
         let now = mach_absolute_time()
 
-        if gameOver {
+        if phase == .dead {
             if machToSeconds(now - gameEndMach) > 3.0 { stop() }
             return
         }
@@ -178,85 +133,79 @@ class FlappyGame: GameBase {
         if mouseDown && !wasMouseDown { flap() }
         wasMouseDown = mouseDown
 
+        let flying = phase == .flying
+
         // Physics
-        if started {
-            velocity += gravity * dt
-            velocity = min(velocity, maxFallSpeed)
+        if flying {
+            velocity += Config.gravity * dt
+            velocity = min(velocity, Config.maxFallSpeed)
             birdY += velocity * dt
         } else {
-            let bob = sin(Double(now) / 200_000_000.0) * 4
+            let bob = sin(Double(now) / Config.bobDivisor) * 4
             birdY = screen.midY - size.height / 2 + CGFloat(bob)
         }
 
-        // Wobble tilt (border glow only)
-        if started {
-            let targetTilt = velocity / 800.0
-            let clampedTilt = max(-0.5, min(0.8, targetTilt))
-            tiltAngle += (clampedTilt - tiltAngle) * 0.15
-        } else {
-            tiltAngle = 0
-        }
+        // Wobble tilt
+        tiltAngle = flying
+            ? tiltAngle + (max(-0.5, min(0.8, velocity / 800.0)) - tiltAngle) * 0.15
+            : 0
 
-        // Speed ramp: increases with score
-        let scrollSpeed = min(baseScrollSpeed + CGFloat(score) * 5, maxScrollSpeed)
+        // Speed ramp
+        let scrollSpeed = min(Config.baseScrollSpeed + CGFloat(score) * 5, Config.maxScrollSpeed)
 
-        // Scroll pipes
-        if started {
+        if flying {
             for i in 0..<pipes.count { pipes[i].x -= scrollSpeed * dt }
         }
 
         // Spawn pipes
         let lastPipeX = pipes.last?.x ?? -1000
-        if started && (pipes.isEmpty || lastPipeX < screen.maxX - pipeInterval) {
+        if flying && (pipes.isEmpty || lastPipeX < screen.maxX - pipeInterval) {
             spawnPipe(screen: screen)
         }
 
         // Remove off-screen pipes
-        let removeList = pipes.filter { $0.x + pipeCapWidth < -20 }
-        pipes.removeAll { pair in pair.x + pipeCapWidth < -20 }
-        for p in removeList {
-            p.topWindow.orderOut(nil)
-            p.bottomWindow.orderOut(nil)
+        pipes.removeAll { p in
+            let offscreen = p.x + Config.pipeCapWidth < -20
+            if offscreen {
+                p.topBody.removeFromSuperlayer()
+                p.topCap.removeFromSuperlayer()
+                p.bottomBody.removeFromSuperlayer()
+                p.bottomCap.removeFromSuperlayer()
+            }
+            return offscreen
         }
 
         // Scoring
         for i in 0..<pipes.count {
-            if !pipes[i].scored && pipes[i].x + pipeBodyWidth / 2 < birdX {
+            if !pipes[i].scored && pipes[i].x + Config.pipeBodyWidth / 2 < birdX {
                 pipes[i].scored = true
                 score += 1
-                scoreLabel?.stringValue = "\(score)"
+                scoreLabel?.attributedStringValue = Self.styledScore("\(score)")
             }
         }
 
         // Collision: floor / ceiling
-        if started && (birdY < screen.minY || birdY + size.height > screen.maxY) {
+        if flying && (birdY < screen.minY || birdY + size.height > screen.maxY) {
             birdY = max(screen.minY, min(screen.maxY - size.height, birdY))
-            doGameOver()
-            return
+            doGameOver(); return
         }
 
         // Collision: pipes
-        if started {
+        if flying {
             let birdRect = CGRect(x: birdX + 4, y: birdY + 4,
                                   width: size.width - 8, height: size.height - 8)
+            let capExtra = (Config.pipeCapWidth - Config.pipeBodyWidth) / 2
             for pair in pipes {
-                let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
                 let topH = pair.gapCenterY - pipeGap / 2
                 let bottomY = pair.gapCenterY + pipeGap / 2
-                let bottomH = screen.maxY - bottomY
-
-                let topBody = CGRect(x: pair.x, y: 0, width: pipeBodyWidth, height: topH - pipeCapHeight)
-                let topCap = CGRect(x: pair.x - capExtra, y: topH - pipeCapHeight,
-                                    width: pipeCapWidth, height: pipeCapHeight)
-                let bottomCap = CGRect(x: pair.x - capExtra, y: bottomY,
-                                       width: pipeCapWidth, height: pipeCapHeight)
-                let bottomBody = CGRect(x: pair.x, y: bottomY + pipeCapHeight,
-                                        width: pipeBodyWidth, height: bottomH - pipeCapHeight)
-
-                if birdRect.intersects(topBody) || birdRect.intersects(topCap) ||
-                   birdRect.intersects(bottomCap) || birdRect.intersects(bottomBody) {
-                    doGameOver()
-                    return
+                let rects = [
+                    CGRect(x: pair.x, y: 0, width: Config.pipeBodyWidth, height: topH - Config.pipeCapHeight),
+                    CGRect(x: pair.x - capExtra, y: topH - Config.pipeCapHeight, width: Config.pipeCapWidth, height: Config.pipeCapHeight),
+                    CGRect(x: pair.x - capExtra, y: bottomY, width: Config.pipeCapWidth, height: Config.pipeCapHeight),
+                    CGRect(x: pair.x, y: bottomY + Config.pipeCapHeight, width: Config.pipeBodyWidth, height: screen.maxY - bottomY - Config.pipeCapHeight),
+                ]
+                if rects.contains(where: { Self.rectsCollide(birdRect, $0) }) {
+                    doGameOver(); return
                 }
             }
         }
@@ -264,30 +213,25 @@ class FlappyGame: GameBase {
         let bounds = CGRect(x: birdX, y: birdY, width: size.width, height: size.height)
         lastBounds = bounds
 
-        // Update visuals
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        movePip(to: CGPoint(x: birdX, y: birdY))
-
-        updatePipeWindows(screen: screen)
-
-        if settings.glow, let border = borderRef {
-            border.show(around: bounds)
-            border.tilt(tiltAngle)
+        withTransaction {
+            movePip(to: CGPoint(x: birdX, y: birdY))
+            updatePipeLayers(screen: screen)
+            if settings.glow, let border = borderRef {
+                border.show(around: bounds)
+                border.tilt(tiltAngle)
+            }
         }
-
-        CATransaction.commit()
     }
 
     // MARK: - Actions
 
     private func flap() {
-        if !started { started = true }
-        velocity = flapImpulse
+        if phase == .idle { phase = .flying }
+        velocity = Config.flapImpulse
     }
 
     private func doGameOver() {
+        phase = .dead
         if score > bestScore { bestScore = score }
         triggerGameOver(message: "Game Over  \(score)")
         showYouDied()
@@ -297,15 +241,8 @@ class FlappyGame: GameBase {
     private func showYouDied() {
         let screen = getScreenFrame()
 
-        let ow = NSWindow(contentRect: NSRect(x: screen.minX, y: 0, width: screen.width, height: screenH),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        ow.isOpaque = false
-        ow.backgroundColor = .clear
+        let ow = createFloatingWindow(frame: NSRect(x: screen.minX, y: 0, width: screen.width, height: screenH))
         ow.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()) + 1)
-        ow.ignoresMouseEvents = true
-        ow.hasShadow = false
-        ow.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-        ow.contentView!.wantsLayer = true
 
         let root = ow.contentView!.layer!
 
@@ -356,81 +293,75 @@ class FlappyGame: GameBase {
     // MARK: - Pipe Creation
 
     private func spawnPipe(screen: CGRect) {
+        guard let root = pipeRootLayer else { return }
         let minGapY = screen.minY + pipeGap / 2 + 60
         let maxGapY = screen.maxY - pipeGap / 2 - 60
         let gapY = CGFloat.random(in: minGapY...maxGapY)
         let x = screen.maxX + 20
 
-        let topW = makePipeWindow(screen: screen, isTop: true, x: x, gapCenterY: gapY)
-        let botW = makePipeWindow(screen: screen, isTop: false, x: x, gapCenterY: gapY)
+        let capExtra = (Config.pipeCapWidth - Config.pipeBodyWidth) / 2
+        let topH = gapY - pipeGap / 2
+        let bottomY = gapY + pipeGap / 2
+        let bottomH = screen.maxY - bottomY
 
-        pipes.append(PipePair(topWindow: topW, bottomWindow: botW,
+        // Top body
+        let topBody = CALayer()
+        let topBodyH = max(topH - Config.pipeCapHeight, 0)
+        topBody.frame = CGRect(x: x, y: screenH - topBodyH, width: Config.pipeBodyWidth, height: topBodyH)
+        topBody.contents = FlappySprites.pipeBodyImage
+        topBody.magnificationFilter = .nearest
+        topBody.minificationFilter = .nearest
+        topBody.contentsGravity = .resize
+        root.addSublayer(topBody)
+
+        // Top cap
+        let topCap = CALayer()
+        topCap.frame = CGRect(x: x - capExtra, y: screenH - topH, width: Config.pipeCapWidth, height: Config.pipeCapHeight)
+        topCap.contents = FlappySprites.pipeCapImage
+        topCap.magnificationFilter = .nearest
+        topCap.minificationFilter = .nearest
+        topCap.contentsGravity = .resize
+        root.addSublayer(topCap)
+
+        // Bottom body
+        let bottomBody = CALayer()
+        let bottomBodyH = max(bottomH - Config.pipeCapHeight, 0)
+        bottomBody.frame = CGRect(x: x, y: 0, width: Config.pipeBodyWidth, height: bottomBodyH)
+        bottomBody.contents = FlappySprites.pipeBodyImage
+        bottomBody.magnificationFilter = .nearest
+        bottomBody.minificationFilter = .nearest
+        bottomBody.contentsGravity = .resize
+        root.addSublayer(bottomBody)
+
+        // Bottom cap
+        let bottomCap = CALayer()
+        bottomCap.frame = CGRect(x: x - capExtra, y: bottomBodyH, width: Config.pipeCapWidth, height: Config.pipeCapHeight)
+        bottomCap.contents = FlappySprites.pipeCapImage
+        bottomCap.magnificationFilter = .nearest
+        bottomCap.minificationFilter = .nearest
+        bottomCap.contentsGravity = .resize
+        root.addSublayer(bottomCap)
+
+        pipes.append(PipePair(topBody: topBody, topCap: topCap,
+                              bottomBody: bottomBody, bottomCap: bottomCap,
                               x: x, gapCenterY: gapY, scored: false))
     }
 
-    private func makePipeWindow(screen: CGRect, isTop: Bool, x: CGFloat, gapCenterY: CGFloat) -> NSWindow {
-        let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
-
-        let pipeH: CGFloat
-        let nsY: CGFloat
-        if isTop {
-            pipeH = gapCenterY - pipeGap / 2
-            nsY = screenH - pipeH
-        } else {
-            let gapBottom = gapCenterY + pipeGap / 2
-            pipeH = screen.maxY - gapBottom
-            nsY = 0
-        }
-
-        let w = NSWindow(contentRect: NSRect(x: x - capExtra, y: nsY,
-                                              width: pipeCapWidth, height: max(pipeH, 1)),
-                         styleMask: .borderless, backing: .buffered, defer: false)
-        w.isOpaque = false
-        w.backgroundColor = .clear
-        w.level = .floating
-        w.ignoresMouseEvents = true
-        w.hasShadow = false
-        w.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-        w.contentView!.wantsLayer = true
-
-        buildPipeLayers(in: w, height: pipeH, isTop: isTop)
-        w.orderFrontRegardless()
-        return w
-    }
-
-    private func buildPipeLayers(in window: NSWindow, height: CGFloat, isTop: Bool) {
-        guard let layer = window.contentView?.layer else { return }
-        let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
-
-        let bodyH = max(height - pipeCapHeight, 0)
-        let bodyY: CGFloat = isTop ? pipeCapHeight : 0
-        let bodyLayer = CALayer()
-        bodyLayer.frame = NSRect(x: capExtra, y: bodyY, width: pipeBodyWidth, height: bodyH)
-        bodyLayer.contents = Sprites.pipeBodyImage
-        bodyLayer.magnificationFilter = .nearest
-        bodyLayer.minificationFilter = .nearest
-        bodyLayer.contentsGravity = .resize
-
-        let capY: CGFloat = isTop ? 0 : height - pipeCapHeight
-        let capLayer = CALayer()
-        capLayer.frame = NSRect(x: 0, y: capY, width: pipeCapWidth, height: pipeCapHeight)
-        capLayer.contents = Sprites.pipeCapImage
-        capLayer.magnificationFilter = .nearest
-        capLayer.minificationFilter = .nearest
-        capLayer.contentsGravity = .resize
-
-        layer.addSublayer(bodyLayer)
-        layer.addSublayer(capLayer)
-    }
-
-    private func updatePipeWindows(screen: CGRect) {
-        let capExtra = (pipeCapWidth - pipeBodyWidth) / 2
+    private func updatePipeLayers(screen: CGRect) {
+        let capExtra = (Config.pipeCapWidth - Config.pipeBodyWidth) / 2
 
         for pair in pipes {
-            let nsX = pair.x - capExtra
             let topH = pair.gapCenterY - pipeGap / 2
-            pair.topWindow.setFrameOrigin(NSPoint(x: nsX, y: screenH - topH))
-            pair.bottomWindow.setFrameOrigin(NSPoint(x: nsX, y: 0))
+            let bottomY = pair.gapCenterY + pipeGap / 2
+            let bottomH = screen.maxY - bottomY
+
+            let topBodyH = max(topH - Config.pipeCapHeight, 0)
+            pair.topBody.frame = CGRect(x: pair.x, y: screenH - topBodyH, width: Config.pipeBodyWidth, height: topBodyH)
+            pair.topCap.frame = CGRect(x: pair.x - capExtra, y: screenH - topH, width: Config.pipeCapWidth, height: Config.pipeCapHeight)
+
+            let bottomBodyH = max(bottomH - Config.pipeCapHeight, 0)
+            pair.bottomBody.frame = CGRect(x: pair.x, y: 0, width: Config.pipeBodyWidth, height: bottomBodyH)
+            pair.bottomCap.frame = CGRect(x: pair.x - capExtra, y: bottomBodyH, width: Config.pipeCapWidth, height: Config.pipeCapHeight)
         }
     }
 }

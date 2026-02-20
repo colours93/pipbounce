@@ -1,56 +1,11 @@
 import Cocoa
 import ApplicationServices
 
-let bounce = BounceGame()
+
 
 class BounceGame: GameBase {
 
-    // MARK: - Pixel Art Sprites
-
-    private enum Sprites {
-        // 28x3 paddle sprites per glow color. Bright center, medium body, dark edges, tapered ends.
-        // Scale ~3 → 84x9, close to paddleLength(80) x paddleThickness(6)
-
-        static let purplePaddle: CGImage? = GameBase.renderPixelArt([
-            [0, 0, 0x6633AA, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x6633AA, 0, 0],
-            [0, 0x7744BB, 0x9966DD, 0xBB88FF, 0xDDAAFF, 0xEECCFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xFFDDFF, 0xEECCFF, 0xDDAAFF, 0xBB88FF, 0x9966DD, 0x7744BB, 0],
-            [0, 0, 0x6633AA, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x7744BB, 0x6633AA, 0, 0],
-        ], scale: 3)
-
-        static let bluePaddle: CGImage? = GameBase.renderPixelArt([
-            [0, 0, 0x2255AA, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x2255AA, 0, 0],
-            [0, 0x3366BB, 0x5588DD, 0x77AAEE, 0x99CCFF, 0xBBDDFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xDDEEFF, 0xBBDDFF, 0x99CCFF, 0x77AAEE, 0x5588DD, 0x3366BB, 0],
-            [0, 0, 0x2255AA, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x3366BB, 0x2255AA, 0, 0],
-        ], scale: 3)
-
-        static let redPaddle: CGImage? = GameBase.renderPixelArt([
-            [0, 0, 0xAA2222, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xAA2222, 0, 0],
-            [0, 0xBB3333, 0xDD5555, 0xEE7777, 0xFF9999, 0xFFBBBB, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFDDDD, 0xFFBBBB, 0xFF9999, 0xEE7777, 0xDD5555, 0xBB3333, 0],
-            [0, 0, 0xAA2222, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xBB3333, 0xAA2222, 0, 0],
-        ], scale: 3)
-
-        static let greenPaddle: CGImage? = GameBase.renderPixelArt([
-            [0, 0, 0x22AA44, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x22AA44, 0, 0],
-            [0, 0x33BB55, 0x55DD77, 0x77EE99, 0x99FFBB, 0xBBFFCC, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xDDFFDD, 0xBBFFCC, 0x99FFBB, 0x77EE99, 0x55DD77, 0x33BB55, 0],
-            [0, 0, 0x22AA44, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x33BB55, 0x22AA44, 0, 0],
-        ], scale: 3)
-
-        static let rainbowPaddle: CGImage? = GameBase.renderPixelArt([
-            [0, 0, 0xAA2266, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xAA2266, 0, 0],
-            [0, 0xBB3377, 0xDD5599, 0xEE77BB, 0xFF99CC, 0xFFBBDD, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFDDEE, 0xFFBBDD, 0xFF99CC, 0xEE77BB, 0xDD5599, 0xBB3377, 0],
-            [0, 0, 0xAA2266, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xBB3377, 0xAA2266, 0, 0],
-        ], scale: 3)
-
-        static func paddleForColor(_ color: String) -> CGImage? {
-            switch color {
-            case "blue": return bluePaddle
-            case "red": return redPaddle
-            case "green": return greenPaddle
-            case "rainbow": return rainbowPaddle
-            default: return purplePaddle
-            }
-        }
-    }
+    // MARK: - Pixel Art Sprites (see BounceSprites.swift)
 
     // Mode
     var paddleMode = false  // false = pure physics toy, true = paddle game
@@ -153,7 +108,7 @@ class BounceGame: GameBase {
 
         // Pixel art paddle layer
         let pLayer = CALayer()
-        pLayer.contents = Sprites.paddleForColor(settings.glowColor)
+        pLayer.contents = BounceSprites.paddleForColor(settings.glowColor)
         pLayer.magnificationFilter = .nearest
         pLayer.minificationFilter = .nearest
         pLayer.contentsGravity = .resize
@@ -174,38 +129,8 @@ class BounceGame: GameBase {
         pw.orderFrontRegardless()
         paddleWindow = pw
 
-        // Score overlay
-        let scoreY = screenH - screen.minY - 50
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - 50, y: scoreY, width: 100, height: 32),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        sw.isOpaque = false
-        sw.backgroundColor = .clear
-        sw.level = .floating
-        sw.ignoresMouseEvents = true
-        sw.hasShadow = false
-        sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-
-        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 100, height: 32))
-        vibrancy.material = .hudWindow
-        vibrancy.blendingMode = .behindWindow
-        vibrancy.state = .active
-        vibrancy.wantsLayer = true
-        vibrancy.layer?.cornerRadius = 8
-        sw.contentView = vibrancy
-
-        let label = NSTextField(frame: NSRect(x: 0, y: 0, width: 100, height: 32))
-        label.isEditable = false
-        label.isBordered = false
-        label.backgroundColor = .clear
-        label.textColor = .white
-        label.font = NSFont.monospacedSystemFont(ofSize: 18, weight: .bold)
-        label.alignment = .center
-        label.stringValue = "0"
-        vibrancy.addSubview(label)
-        sw.orderFrontRegardless()
-
-        scoreOverlay = sw
-        scoreLabel = label
+        // Score overlay — shared liquid glass pill
+        createScoreOverlay(screen: screen)
     }
 
     override func onStop() {
@@ -275,8 +200,8 @@ class BounceGame: GameBase {
             if posHistory.count > 8 { posHistory.removeFirst() }
         } else {
             velocity.y += gravity * dt
-            velocity.x *= airFriction
-            velocity.y *= airFriction
+            velocity.x *= pow(airFriction, dt * 500)
+            velocity.y *= pow(airFriction, dt * 500)
 
             // Clamp velocity so PiP can't teleport across screen in one frame
             let maxVel: CGFloat = 2000
@@ -289,7 +214,7 @@ class BounceGame: GameBase {
                 let pipCenter = CGPoint(x: position.x + cachedPipSize.width / 2,
                                          y: position.y + cachedPipSize.height / 2)
                 let toP = CGPoint(x: paddleCenter.x - pipCenter.x, y: paddleCenter.y - pipCenter.y)
-                let dist = sqrt(toP.x * toP.x + toP.y * toP.y)
+                let dist = Self.distance(paddleCenter, pipCenter)
                 if dist > 1 {
                     let spd = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
                     let nudge = perkState.homingStrength * spd
@@ -305,7 +230,7 @@ class BounceGame: GameBase {
                                          y: position.y + cachedPipSize.height / 2)
                 let dx = paddleCenter.x - pipCenter.x
                 let dy = paddleCenter.y - pipCenter.y
-                let dist = sqrt(dx * dx + dy * dy)
+                let dist = Self.distance(paddleCenter, pipCenter)
                 if dist < 120 && dist > 1 {
                     velocity.x += dx / dist * perkState.gravityWellStrength * dt
                     velocity.y += dy / dist * perkState.gravityWellStrength * dt
@@ -374,26 +299,23 @@ class BounceGame: GameBase {
         let bounds = CGRect(origin: position, size: size)
         lastBounds = bounds
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        if settings.glow, let border = borderRef {
-            border.show(around: bounds)
-            if !isDragging {
-                let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
-                if speed > 20 {
-                    let targetTilt = atan2(velocity.y, velocity.x) * 0.15
-                    tiltAngle += (targetTilt - tiltAngle) * 0.08
+        withTransaction {
+            if settings.glow, let border = borderRef {
+                border.show(around: bounds)
+                if !isDragging {
+                    let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
+                    if speed > 20 {
+                        let targetTilt = atan2(velocity.y, velocity.x) * 0.15
+                        tiltAngle += (targetTilt - tiltAngle) * (1.0 - pow(1.0 - 0.08, dt * 500))
+                    } else {
+                        tiltAngle *= pow(0.9, dt * 500)
+                    }
                 } else {
-                    tiltAngle *= 0.9
+                    tiltAngle *= pow(0.9, dt * 500)
                 }
-            } else {
-                tiltAngle *= 0.9
+                border.tilt(tiltAngle)
             }
-            border.tilt(tiltAngle)
         }
-
-        CATransaction.commit()
     }
 
     // MARK: - Paddle Logic
@@ -491,9 +413,9 @@ class BounceGame: GameBase {
         }
 
         // --- Panic: when PiP is heading straight at the paddle, brief freeze ---
-        let dx = pipCenter.x - (screen.minX + perimeterT * screen.width)
-        let dy = pipCenter.y - (screen.minY + perimeterT * screen.height)
-        let distToPaddle = sqrt(dx * dx + dy * dy)
+        let paddlePos = CGPoint(x: screen.minX + perimeterT * screen.width,
+                                y: screen.minY + perimeterT * screen.height)
+        let distToPaddle = Self.distance(pipCenter, paddlePos)
         let screenDiag = sqrt(screen.width * screen.width + screen.height * screen.height)
 
         if panicFreezeTimer > 0 {
@@ -569,8 +491,6 @@ class BounceGame: GameBase {
                                  width: paddleRect.width, height: paddleRect.height)
             pw.setFrame(nsFrame, display: true)
             if let pLayer = paddleLayer {
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
                 pLayer.frame = CGRect(origin: .zero, size: nsFrame.size)
                 // Ghost: flicker opacity (reset when expired)
                 if perkState.isActive(.ghost) {
@@ -578,7 +498,6 @@ class BounceGame: GameBase {
                 } else if pLayer.opacity < 0.5 {
                     pLayer.opacity = 1.0
                 }
-                CATransaction.commit()
             }
         }
 
@@ -587,10 +506,11 @@ class BounceGame: GameBase {
             ? CGSize(width: size.width * 1.8, height: size.height * 1.8)
             : size
         let pipRect = CGRect(origin: position, size: collisionSize)
-        if pipRect.intersects(paddleRect) && now > paddleHitCooldown {
+        if Self.rectsCollide(pipRect, paddleRect) && now > paddleHitCooldown {
             perkState.registerHit()
             score += perkState.scorePerHit
-            scoreLabel?.stringValue = "\(score)"
+            scoreLabel?.attributedStringValue = Self.styledScore("\(score)")
+            pulseScoreOverlay()
             paddleHitCooldown = now + secondsToMach(perkState.hitCooldownSeconds)
 
             // On hit: nudge the paddle slightly (it got caught, needs to recover)

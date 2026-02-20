@@ -25,6 +25,25 @@ classDiagram
         +stop()
     }
 
+    class GameState {
+        <<enum>>
+        ready
+        playing
+        gameOver
+    }
+
+    class LayerPool {
+        +dequeue() CALayer
+        +enqueue(layer)
+        +drain()
+    }
+
+    class SoundKit {
+        +shared: SoundKit$
+        +preload()
+        +play(sfx: SFX)
+    }
+
     class GameBase {
         <<abstract>>
         +active: Bool
@@ -35,13 +54,15 @@ classDiagram
         +screenH: CGFloat
         +lastMach: UInt64
         +score: Int
-        +gameOver: Bool
+        +state: GameState
+        +layerPool: LayerPool
         +gameEndMach: UInt64
         +gameOverDelay: 2.5s
         -timerIntervalMs: Int = 2
         -gameTimer: DispatchSourceTimer?
         +machToSeconds(ticks) CGFloat
         +deltaTime() CGFloat
+        +verifyPipAlive() Bool
         +refreshPipSize()
         +movePip(to) Bool
         +syncBorder(around)
@@ -51,21 +72,32 @@ classDiagram
         +createFullscreenOverlay(screen)
         +mousePosition() CGPoint?
         +isMouseDown: Bool
-        +renderPixelArt(pixels, scale) CGImage?
-        +pixelArtLayer(pixels, scale, size) CALayer
+        +renderPixelArt(pixels, scale) CGImage?$
+        +pixelArtLayer(pixels, scale, size) CALayer$
+        +rectsCollide(a, b) Bool$
+        +circleHitsRect(center, radius, rect) Bool$
+        +distance(a, b) CGFloat$
+        +pointInRect(point, rect) Bool$
         +onStart(screen, pip)*
         +onStop()*
         +gameTick()*
     }
 
-    class PongGame {
+    class PiPongGame {
         timerIntervalMs = 8
-        +paddleMode: false
         -baseSpeed: 420 px/s
         -maxSpeed: 900 px/s
         -aiReactionDelay: 0.15s
         -winScore: 7 by 2
         -trailCount: 3
+    }
+    class PiPong2Game {
+        timerIntervalMs = 8
+        -ballSize: 16
+        -baseSpeed: 420 px/s
+        -maxSpeed: 900 px/s
+        -aiReactionDelay: 0.15s
+        -winScore: 7 by 2
     }
     class FlappyGame {
         timerIntervalMs = 4
@@ -140,7 +172,10 @@ classDiagram
     }
 
     MiniGame <|.. GameBase : implements
-    GameBase <|-- PongGame
+    GameBase --> GameState
+    GameBase --> LayerPool
+    GameBase <|-- PiPongGame
+    GameBase <|-- PiPong2Game
     GameBase <|-- FlappyGame
     GameBase <|-- SnakeGame
     GameBase <|-- BounceGame
@@ -159,10 +194,11 @@ classDiagram
 Each game class is instantiated exactly once at module load time as a file-scope `let` constant. This makes each instance globally accessible without reference passing:
 
 ```swift
-let pong       = PongGame()
+let pipong     = PiPongGame()    // PiPong classic: PiP = ball
+let pipong2    = PiPong2Game()   // PiPong 2: PiP = paddle
 let flappy     = FlappyGame()
 let snake      = SnakeGame()
-let bounce     = BounceGame()
+let bounce     = BounceGame()    // serves both physics toy and paddle modes
 let breakout   = BreakoutGame()
 let invaders   = InvadersGame()
 let frogger    = FroggerGame()
@@ -197,7 +233,7 @@ sequenceDiagram
     DD->>DD: findPipWindow() — locate AX element
     DD->>GB: start(screen, pip, border)
     GB->>GB: cache axWindow, pipSize, screenH
-    GB->>GB: reset score=0, gameOver=false
+    GB->>GB: reset score=0, state=.playing
     GB->>GB: record lastMach = mach_absolute_time()
     GB->>SC: onStart(screen, pip)
     SC->>SC: resize PiP if needed (Flappy: 200x112)
@@ -229,15 +265,19 @@ sequenceDiagram
     GB->>GB: borderRef.rotationPadding = 0, tilt(0), hide()
     GB->>SC: onStop()
     SC->>SC: remove custom overlays (NSWindow.orderOut)
+    GB->>GB: layerPool.drain()
     GB->>GB: orderOut scoreOverlay
 ```
 
 ### Key invariants
 
 - Only one game can be active at a time. `toggleGame()` stops all running games before starting a new one.
-- The daemon's 60 Hz main-loop timer (`tick()`) returns immediately when any game is active, avoiding AX IPC contention.
+- The daemon's main-loop timer (`tick()`) returns immediately when any game is active, avoiding AX IPC contention.
 - `movePip(to:)` calls `stop()` on AX error, cleanly aborting the game if the PiP window disappears.
+- `verifyPipAlive()` provides an additional safety check — games call it at the top of `gameTick()` to detect and handle PiP window disappearance.
 - `deltaTime()` is clamped to 50 ms (20 fps equivalent), preventing physics tunneling if the main thread stalls.
+- `layerPool.drain()` is called in `stop()` to release all recycled layers, preventing memory accumulation across sessions.
+- The `GameState` enum (`ready`, `playing`, `gameOver`) provides a clean three-phase lifecycle with `triggerGameOver()` and `checkGameOverTimeout()` managing transitions.
 
 ---
 
@@ -297,7 +337,104 @@ layer.magnificationFilter = .nearest
 layer.minificationFilter = .nearest
 ```
 
-Sprite images (pipe caps, ghost faces, vehicle sprites, platform tiles) are baked at module load time as static constants on each game's inner `Sprites` enum, so there is zero per-frame allocation for pixel art rendering.
+Sprite images (pipe caps, ghost faces, vehicle sprites, platform tiles) are baked at module load time as static constants in dedicated sprite enum files under `Sprites/`, so there is zero per-frame allocation for pixel art rendering.
+
+### 3.4 Layer Pooling
+
+Each `GameBase` instance owns a `LayerPool` (defined in `LayerPool.swift`). Games that frequently create and destroy `CALayer` objects — Snake (tail segments), Invaders (alien grid + bullets), Breakout (brick destruction), Asteroids (debris + bullets) — use pooling to eliminate allocation overhead in hot-path ticks.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#00ff88', 'edgeLabelBackground': '#111', 'clusterBkg': '#0d0d14'}}}%%
+sequenceDiagram
+    participant G as Game (gameTick)
+    participant LP as LayerPool
+    participant CA as CALayer
+
+    Note over G,LP: Need a new layer
+    G->>LP: dequeue()
+    alt pool has layers
+        LP->>LP: popLast(), isHidden=false
+        LP-->>G: recycled CALayer
+    else pool empty
+        LP->>CA: CALayer()
+        LP-->>G: fresh CALayer
+    end
+
+    Note over G,LP: Layer no longer needed
+    G->>LP: enqueue(layer)
+    LP->>LP: reset all properties
+    LP->>LP: removeFromSuperlayer()
+    LP->>LP: pool.append(layer)
+
+    Note over G,LP: Game stops
+    G->>LP: drain()
+    LP->>LP: pool.removeAll()
+```
+
+The `enqueue()` method performs a full property reset: `removeAllAnimations()`, `contents = nil`, `sublayers = nil`, `isHidden = true`, `opacity = 1.0`, `transform = CATransform3DIdentity`, `backgroundColor = nil`, `borderWidth = 0`, `cornerRadius = 0`, and `removeFromSuperlayer()`.
+
+### 3.5 Sound Effects
+
+`SoundKit` (defined in `SoundKit.swift`) provides a centralized audio layer. Five `SFX` enum cases map to macOS system sounds:
+
+| SFX | NSSound Name | Typical Usage |
+|-----|-------------|---------------|
+| `.hit` | Tink | Paddle contact, brick hit, bullet impact |
+| `.score` | Pop | Point scored, food collected |
+| `.death` | Basso | Player death, game over |
+| `.shoot` | Funk | Bullet fired |
+| `.bounce` | Purr | Wall bounce, platform landing |
+
+`SoundKit.shared.preload()` is called once in `main.swift` at daemon startup. Games call `SoundKit.shared.play(.sfx)` inline during `gameTick()`. If a sound is already playing, it is stopped and restarted immediately to avoid queuing.
+
+### 3.6 Collision Helpers
+
+Four static methods on `GameBase` standardize collision detection across all game modes, replacing per-game inline implementations:
+
+| Method | Algorithm | Games Using It |
+|--------|-----------|----------------|
+| `rectsCollide(_:_:)` | `CGRect.intersects` — AABB overlap | Breakout, Frogger, Runner, Snake, Invaders |
+| `circleHitsRect(center:radius:rect:)` | Nearest-point clamping: clamp circle center to rect, check distance ≤ radius | Asteroids, Pong ball collision |
+| `distance(_:_:)` | `√(dx² + dy²)` — Euclidean distance | CursorHunt, Asteroids bullet-asteroid check |
+| `pointInRect(_:_:)` | `CGRect.contains` — point containment | Pac-Man dot collection, Bounce grab detection |
+
+### 3.7 Sprite Extraction
+
+Pixel-art sprite data has been extracted from inline arrays in game files into 10 dedicated `enum` types under `daemon/Games/Sprites/`. Each enum holds `static let` properties of type `CGImage?`, baked at module load time via `GameBase.renderPixelArt()`.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111', 'clusterBkg': '#0d0d14'}}}%%
+graph TD
+    classDef sprite fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+    classDef game fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef render fill:#0a3520,stroke:#00ff88,color:#00ff88
+
+    RPA["GameBase.renderPixelArt()\nSoftware renderer\n2D UInt32 array → CGImage"]:::render
+
+    AS["AsteroidsSprites"]:::sprite --> RPA
+    BS["BounceSprites"]:::sprite --> RPA
+    BKS["BreakoutSprites"]:::sprite --> RPA
+    DJS["DoodleJumpSprites"]:::sprite --> RPA
+    FS["FlappySprites"]:::sprite --> RPA
+    FRS["FroggerSprites"]:::sprite --> RPA
+    IS["InvadersSprites"]:::sprite --> RPA
+    PMS["PacManSprites"]:::sprite --> RPA
+    RS["RunnerSprites"]:::sprite --> RPA
+    SNS["SnakeSprites"]:::sprite --> RPA
+
+    AG["AsteroidsGame"]:::game -.->|"uses"| AS
+    BG["BounceGame"]:::game -.-> BS
+    BKG["BreakoutGame"]:::game -.-> BKS
+    DJG["DoodleJumpGame"]:::game -.-> DJS
+    FG["FlappyGame"]:::game -.-> FS
+    FRG["FroggerGame"]:::game -.-> FRS
+    IG["InvadersGame"]:::game -.-> IS
+    PMG["PacManGame"]:::game -.-> PMS
+    RG["RunnerGame"]:::game -.-> RS
+    SNG["SnakeGame"]:::game -.-> SNS
+```
+
+This separation keeps game logic files focused on mechanics (typically 200-500 lines each) while sprite data (often 100-400 lines of hex color arrays) lives in dedicated files.
 
 ---
 
@@ -309,7 +446,7 @@ Each game sets `timerIntervalMs` before calling `super.start()`. The base class 
 |---|---|
 | 2 ms (~500 Hz) | Bounce, BounceGame (paddle), Snake, Asteroids, CursorHunt, DoodleJump |
 | 4 ms (~250 Hz) | Flappy |
-| 8 ms (~125 Hz) | Pong, Breakout, Invaders, Frogger, Runner, PacMan |
+| 8 ms (~125 Hz) | PiPong, PiPong 2, Snake, Breakout, Invaders, Frogger, Runner, PacMan |
 
 The 2 ms games require sub-frame precision for fluid physics (gravity, drift, collision) or tightly-coupled input (cursor tracking). The 8 ms games are turn-based or have coarser physics where the higher overhead of AX calls dominates.
 
@@ -323,11 +460,13 @@ The following sections provide complete technical specifications for each of the
 
 ---
 
-### 5.1 Pong
+### 5.1 PiPong (Classic)
 
-**Singleton:** `pong` | **Timer:** 8 ms
+**Singleton:** `pipong` | **Timer:** 8 ms
 
 The PiP window is the ball. Two paddles rendered as floating `NSWindow` rectangles bracket the screen. The player controls the left paddle by moving the mouse vertically; the AI controls the right paddle. First to 7 goals, win by 2, constitutes a match.
+
+**Sprites:** Uses `FlappySprites` for glow cycle colors (purple → cyan → green).
 
 **Physics and Ball Dynamics**
 
@@ -360,6 +499,66 @@ On ball-paddle contact, `flashPaddle()` fires a `CABasicAnimation` on the paddle
 | Win condition | 7 goals, win by 2 |
 | Trail ghosts | 3 layers |
 | Shake duration | 5 frames |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Serving:::cyan
+    Serving --> Rally:::green : ball launched
+    Rally --> PaddleHit:::purple : ball hits paddle
+    PaddleHit --> Rally : deflect + speed ramp
+    Rally --> WallBounce:::purple : top/bottom edge
+    WallBounce --> Rally : reflect Y velocity
+    Rally --> Goal:::red : ball passes left/right edge
+    Goal --> ShakeAnim:::red : 5-frame screen shake
+    ShakeAnim --> Serving : reset ball to center
+    Goal --> MatchOver:::red : score reaches 7 (win by 2)
+    MatchOver --> [*]
+
+    state Rally {
+        [*] --> Physics
+        Physics --> AIUpdate : every 150ms
+        AIUpdate --> TrailSample : every 2 frames
+        TrailSample --> Physics
+    }
+```
+
+---
+
+### 5.1b PiPong 2
+
+**Singleton:** `pipong2` | **Timer:** 8 ms
+
+A variant where the PiP window is the player's paddle (controlled by mouse Y), and the ball is a separate 16px overlay window. The AI controls the opposite paddle. Same match format (first to 7, win by 2), same speed ramp and AI behavior as PiPong classic, but the perspective is reversed — the player is now the paddle rather than the ball.
+
+| Property | Value |
+|---|---|
+| Ball size | 16 × 16 pt overlay |
+| Paddle height | 150 pt |
+| AI speed | 300 px/s |
+| Base ball speed | 420 px/s |
+| Max ball speed | 900 px/s |
+| Win condition | 7 goals, win by 2 |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph LR
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    M[Mouse Y]:::cyan --> PP[PiP = Paddle]:::purple
+    PP --> BW[Ball Window 16px]:::green
+    BW --> AIP[AI Paddle]:::purple
+    AIP -->|deflect| BW
+    BW -->|goal| SC[Score + Shake]:::cyan
+    SC --> BW
+```
 
 ---
 
@@ -397,6 +596,35 @@ Flappy maintains a `bestScore` variable across sessions (within the same daemon 
 | Pipe cap width | 70 × 28 pt |
 | Scroll speed | 200 px/s |
 | Gap height | pipHeight + 160 pt |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Idle:::cyan
+    Idle --> Idle : bob via sin(time)
+    Idle --> Flying:::green : left click (flap impulse −360)
+    Flying --> Flying : gravity +900 px/s²
+    Flying --> Flying : click → flap impulse
+    Flying --> PipeScored:::purple : PiP passes pipe gap
+    PipeScored --> Flying : score++, spawn next pipe
+    Flying --> Dead:::red : hit pipe or floor/ceiling
+    Dead --> GameOver:::red : show score + best
+    GameOver --> [*] : 2.5s timeout → stop()
+
+    state Flying {
+        [*] --> ApplyGravity
+        ApplyGravity --> ClampFallSpeed : cap 700 px/s
+        ClampFallSpeed --> ScrollPipes : pipes move left 200 px/s
+        ScrollPipes --> CollisionCheck
+        CollisionCheck --> TiltBorder : lerp velocity angle
+        TiltBorder --> ApplyGravity
+    }
+```
 
 ---
 
@@ -441,6 +669,32 @@ On food collection, a `CAEmitterLayer` burst fires from the apple's world positi
 | Boost | 2× for 0.3 s, 2 s cooldown |
 | Camera lerp | 0.08 |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph TD
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    subgraph World ["Toroidal World (3× screen)"]
+        HEAD[PiP = Head]:::cyan
+        TAIL[Tail Segments<br/>NSWindow per segment]:::purple
+        FOOD[Apple Food Item]:::green
+        CAM[Camera Lerp 0.08]:::cyan
+    end
+
+    MOUSE[Mouse Cursor]:::cyan --> STEER
+    STEER[Angle Clamp<br/>6 rad/s max turn]:::purple --> HEAD
+    HEAD --> |distance samples<br/>every 6px| TAIL
+    HEAD --> |collision| FOOD
+    FOOD --> |score + grow<br/>+10 px/s speed| HEAD
+    HEAD --> |self-collision<br/>inset 4px| DEAD[Game Over]:::red
+    HEAD --> CAM
+    CLICK[Left Click]:::cyan --> BOOST[2× Speed<br/>0.3s duration<br/>2s cooldown]:::green
+    BOOST --> HEAD
+```
+
 ---
 
 ### 5.4 Bounce (Physics Toy)
@@ -473,6 +727,25 @@ When the magnitude of velocity drops below `restThreshold = 3.0` px/s and the Pi
 | Rest threshold | 3 px/s |
 | Throw history | 8 samples |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Freefall:::cyan
+    Freefall --> Freefall : gravity 120 px/s² + air friction
+    Freefall --> Grabbed:::green : mouse down inside PiP rect
+    Grabbed --> Grabbed : track position history (8 samples)
+    Grabbed --> Thrown:::purple : mouse up → compute flick velocity
+    Thrown --> Freefall : apply velocity vector
+    Freefall --> EdgeBounce:::purple : hit screen boundary
+    EdgeBounce --> Freefall : reflect normal × elasticity 0.9
+    Freefall --> Rest:::cyan : speed < 3 px/s → zero velocity
+    Rest --> Grabbed : mouse down inside PiP rect
+```
+
 ---
 
 ### 5.5 Bounce Paddle (Challenge Mode)
@@ -498,6 +771,31 @@ A `100 × 32` pt vibrancy HUD overlay with 18 pt monospaced bold text shows the 
 | Paddle size | 80 × 6 pt |
 | Paddle speed | 0.4 lerp per tick |
 | Milestone bursts | 20 (tier 1), 50 (tier 2), 100 (tier 3) |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph TD
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    PHYS[Bounce Physics<br/>gravity + elasticity]:::cyan --> PIP[PiP = Ball]:::cyan
+    PIP --> EDGE[Screen Edge Bounce]:::purple
+    PIP --> PADDLE[AI Paddle<br/>perimeter tracking]:::purple
+
+    subgraph AI ["AI Paddle Brain"]
+        RT[Reaction Timer<br/>0.35s → 0.10s]:::purple
+        DT[Dodge Target<br/>opposite side + noise]:::purple
+        PF[Panic Freeze<br/>chance decays with score]:::red
+        RT --> DT --> PF
+    end
+
+    PADDLE --> |collision| HIT[Score++]:::green
+    HIT --> |every 5 hits| PERK[Perk Offering<br/>3 random perks]:::green
+    HIT --> |20/50/100| BURST[Sacred Geometry Burst]:::purple
+    PERK --> |freeze/ghost/thicc/<br/>drunk/slowmo/etc| DEBUFF[Apply Perk to AI]:::red
+```
 
 ---
 
@@ -528,6 +826,38 @@ The game starts with 3 lives. Extra lives are awarded at 500 and 1500 points (on
 | Row 3 | 30 |
 | Row 4 | 20 |
 | Row 5 | 10 |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> OnPaddle:::cyan
+    OnPaddle --> OnPaddle : mouse X → paddle X
+    OnPaddle --> Launched:::green : click → random angle launch
+
+    state Launched {
+        [*] --> BallPhysics
+        BallPhysics --> WallBounce:::purple : hit top/left/right
+        WallBounce --> BallPhysics
+        BallPhysics --> PaddleDeflect:::green : hit paddle
+        PaddleDeflect --> BallPhysics : angle from hit position
+        BallPhysics --> BrickHit:::purple : rectsCollide with brick
+        BrickHit --> BrickDeath:::red : hitsRemaining == 0
+        BrickHit --> BrickDamage:::cyan : hitsRemaining > 0
+        BrickDeath --> ParticleBurst:::red : CAEmitterLayer at impact
+        BrickDeath --> LevelClear:::green : all bricks destroyed
+        LevelClear --> OnPaddle : shrink paddle, speed up
+    }
+
+    Launched --> LoseLife:::red : ball falls below screen
+    LoseLife --> OnPaddle : lives > 0
+    LoseLife --> GameOver:::red : lives == 0
+    GameOver --> [*]
+```
 
 ---
 
@@ -565,6 +895,33 @@ The player starts with 3 lives. After being hit, the ship enters a 1.5-second in
 | UFO points | 50 / 100 / 150 / 300 |
 | Invulnerability | 1.5 s |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph TD
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    subgraph Tick ["Game Tick (8ms)"]
+        GRID[Grid Movement<br/>speed ↑ with kills]:::cyan
+        ANIM[Animation Frame<br/>swap every 30 ticks]:::purple
+        SHOOT[Alien Shoots<br/>lowest per column]:::red
+        PBUL[Player Bullets<br/>hold = 4/sec, max 3]:::green
+    end
+
+    GRID --> |edge hit| DROP[Reverse + Step Down]:::purple
+    PBUL --> |rectsCollide| KILL[Alien Death<br/>explosion particles]:::red
+    KILL --> |score pop| PTS[+10/20/30 per row]:::green
+    KILL --> |all dead| WAVE[Next Wave<br/>×1.15 speed, ×0.85 shot interval]:::cyan
+    SHOOT --> |hit ship| HIT[Lose Life<br/>1.5s invulnerability blink]:::red
+
+    subgraph UFO ["Mystery UFO"]
+        SPAWN[Spawn 20-30s]:::purple --> FLY[150 px/s horizontal]:::purple
+        FLY --> |shot| UFOPT[50/100/150/300 pts]:::green
+    end
+```
+
 ---
 
 ### 5.8 Frogger
@@ -593,6 +950,38 @@ Base lane speed increases by 15 px/s per successful crossing. Near-miss detectio
 
 On collision, the screen shakes at 8 px amplitude for approximately 30 Hz (simulated by alternating pixel offsets each tick) for 0.25 seconds. The frog resets to lane 0 center and lives decrement.
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph TD
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    SAFE0[Lane 0: Safe Start]:::green
+    L1[Lane 1: Traffic ←]:::cyan
+    L2[Lane 2: Traffic →]:::cyan
+    L3[Lane 3: Traffic ←]:::cyan
+    L4[Lane 4: Traffic →]:::cyan
+    L5[Lane 5: Traffic ←]:::cyan
+    L6[Lane 6: Traffic →]:::cyan
+    SAFE7[Lane 7: Goal]:::green
+
+    SAFE0 -->|left click| L1
+    L1 -->|left click| L2
+    L2 -->|left click| L3
+    L3 -->|left click| L4
+    L4 -->|left click| L5
+    L5 -->|left click| L6
+    L6 -->|left click| SAFE7
+
+    SAFE7 -->|score++ respawn cars<br/>+20 px/s speed| SAFE0
+
+    L1 & L2 & L3 & L4 & L5 & L6 -->|right click| BACK[Hop Back 1 Lane]:::purple
+    L1 & L2 & L3 & L4 & L5 & L6 -->|car collision| DEATH[Death Shake<br/>14px amp, 0.3s]:::red
+    L1 & L2 & L3 & L4 & L5 & L6 -->|near miss<br/>12px threshold| PULSE[Yellow Border Flash]:::purple
+```
+
 ---
 
 ### 5.9 Runner
@@ -610,6 +999,42 @@ Each obstacle layer uses tiled pixel-art textures (10 × 4 px at scale 3). Gap e
 **Zone System**
 
 Approximately every 10 obstacles, a zone transition announces a new theme and pauses the game briefly. Zone colors cycle through 6 tile themes: grey, blue, purple, brown, forest, crimson.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Running:::green
+    Running --> Running : mouse Y → PiP Y, obstacles scroll left
+
+    state Running {
+        [*] --> SpawnObstacle
+        SpawnObstacle --> ScrollLeft:::cyan : 200-600 px/s
+        ScrollLeft --> GapOscillate:::purple : sinusoidal amplitude 30-70px
+        GapOscillate --> CollisionCheck:::red
+        CollisionCheck --> ScorePoint:::green : PiP passes obstacle
+    }
+
+    ScorePoint --> ZoneTransition:::purple : every 10 obstacles
+    ZoneTransition --> ZonePause:::cyan : 0.5s pause + zone name flash
+
+    state ZoneTransition {
+        [*] --> UpdateTiles : new tile art + cap art
+        UpdateTiles --> UpdateAtmosphere : zone overlay color
+        UpdateAtmosphere --> SpeedStep : +60 px/s per zone
+    }
+
+    ZonePause --> Running : resume scrolling
+
+    Running --> DeathFlash:::red : hit obstacle (3-phase flash)
+    DeathFlash --> EmberExplosion:::red : 40-55 particles
+    EmberExplosion --> GameOver:::red : show hellfire message
+    GameOver --> [*]
+```
 
 ---
 
@@ -656,6 +1081,36 @@ Up to 5 bullets can be in flight simultaneously (`maxBullets`). Each bullet trav
 | Bullet lifetime | 2 s |
 | Camera lerp | 0.08 |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph TD
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    subgraph World ["Toroidal World (3× screen)"]
+        SHIP[PiP = Ship]:::cyan
+        AST[Asteroids<br/>L→2M→2S→gone]:::purple
+        BUL[Bullets<br/>max 5, 600 px/s]:::green
+        CAM[Camera Lerp 0.08]:::cyan
+    end
+
+    MOUSE[Mouse Direction]:::cyan --> THRUST[Thrust 400 px/s²]:::green
+    THRUST --> SHIP
+    SHIP --> |drift decay<br/>half-life 1.0s| SHIP
+    CLICK[Hold Click]:::cyan --> |auto-fire 4/sec| BUL
+    BUL --> |rectsCollide| AST
+    AST --> |split| SPLIT{Size?}:::purple
+    SPLIT --> |large| MED[2× Medium]:::purple
+    SPLIT --> |medium| SML[2× Small]:::purple
+    SPLIT --> |small| GONE[Destroyed]:::red
+    AST --> |hit ship| HIT[Lose Life<br/>2s invuln blink]:::red
+    AST --> |all cleared| WAVECLR[Wave Clear<br/>1.5s pause]:::green
+    WAVECLR --> |+1 asteroid| NEWWAVE[Next Wave]:::cyan
+    SHIP --> CAM
+```
+
 ---
 
 ### 5.11 Cursor Hunt
@@ -685,6 +1140,31 @@ The hit rect is inset by 8 pt on all sides to give the player a small grace marg
 | Hit inset | 8 pt |
 | Score | Survival seconds (1 decimal) |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+graph LR
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    CURSOR[Mouse Cursor]:::cyan
+    PIP[PiP Window]:::purple
+    ACCEL["Accelerate toward cursor<br/>400 + 40×t px/s²"]:::green
+    TRAIL[Particle Trail<br/>purple/cyan/red emitters]:::purple
+    CATCH[Cursor inside PiP<br/>inset 4px hitbox]:::red
+
+    CURSOR --> ACCEL --> PIP
+    PIP --> |friction 0.994| PIP
+    PIP --> |speed cap<br/>500→1600 px/s| PIP
+    PIP --> TRAIL
+    PIP --> |pointInRect| CATCH
+    CATCH --> OVER["CAUGHT Xs"]:::red
+
+    TILT[Border Tilt<br/>tracks velocity angle]:::purple
+    PIP --> TILT
+```
+
 ---
 
 ### 5.12 Doodle Jump
@@ -712,6 +1192,39 @@ Camera Y only advances upward (never scrolls down). It tracks the PiP's highest 
 | Strong bounce | −620 px/s |
 | Platform width | 1.4× PiP width |
 | Platform height | 14 pt |
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Rising:::green
+    Rising --> Rising : gravity 750 px/s² pulls down
+    Rising --> Falling:::cyan : velocity flips positive
+    Falling --> PlatformLand:::green : pipBottom crosses platTop
+    PlatformLand --> Rising : bounce impulse −500 (or −600 strong)
+
+    state Falling {
+        [*] --> CheckPlatforms
+        CheckPlatforms --> MovingPlats:::purple : oscillating platforms
+        CheckPlatforms --> StaticPlats:::cyan : fixed green platforms
+    }
+
+    Falling --> BelowScreen:::red : fell past camera bottom
+    BelowScreen --> GameOver:::red
+
+    Rising --> SpawnPlatforms:::purple : nextPlatformY above camera
+    Rising --> ScrollCamera:::cyan : camera only moves UP
+
+    note right of Rising
+        Mouse X = horizontal position
+        Score = highest point / 10
+        Spacing increases with score
+    end note
+```
 
 ---
 
@@ -753,6 +1266,49 @@ All dots consumed triggers a win display, then the game resets to a fresh maze. 
 | Tunnel row | Row 8 |
 | Lives | 3 |
 
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111'}}}%%
+stateDiagram-v2
+    classDef cyan fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef green fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef red fill:#2a0a1a,stroke:#ff4d6d,color:#ff4d6d
+    classDef purple fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    [*] --> Navigate:::cyan
+    Navigate --> Navigate : mouse direction → next turn queued
+
+    state Navigate {
+        [*] --> MovePlayer
+        MovePlayer --> CollectDot:::green : cell == 1 (+10 pts)
+        MovePlayer --> CollectPellet:::green : cell == 2 (+50 pts)
+        MovePlayer --> TunnelWrap:::purple : row 8, col < 0 or > 20
+    }
+
+    CollectPellet --> PowerMode:::purple : 6s scared timer
+
+    state PowerMode {
+        [*] --> GhostsScared
+        GhostsScared --> EatGhost:::green : collision while scared
+        EatGhost --> ComboChain:::green : 200→400→800→1600
+        GhostsScared --> FlashWarning:::red : timer < 2s
+    }
+
+    state GhostAI ["Ghost AI (×4)"] {
+        [*] --> Chase:::red
+        Chase --> Chase : shortest path to player
+        Chase --> Scatter:::purple : scared mode
+        Scatter --> Scatter : random direction at intersections
+        Chase --> Eaten:::cyan : ghost eaten → return to house
+        Eaten --> Chase : reached ghost house center
+    }
+
+    Navigate --> GhostHit:::red : collision with normal ghost
+    GhostHit --> Respawn:::cyan : lives > 0
+    GhostHit --> GameOver:::red : lives == 0
+    Navigate --> AllDotsEaten:::green : dotsRemaining == 0
+    AllDotsEaten --> YouWin:::green
+```
+
 ---
 
 ## 6. Shared Input Model
@@ -782,6 +1338,12 @@ To add a new game mode to pipbounce:
 3. Implement the three abstract hooks:
    - `onStart(screen:pip:)` — create overlays, initialize state, position PiP.
    - `onStop()` — call `orderOut(nil)` on all custom `NSWindow` overlays.
-   - `gameTick()` — physics update, then `movePip(to:)`, then `syncBorder(around:)`.
-4. Register the singleton in `DodgeDaemon.tick()` active-game guard list.
-5. Add the game toggle to `ControlServer.routeRequest()` and expose it in the extension popup.
+   - `gameTick()` — call `deltaTime()` and `verifyPipAlive()` at top, then physics update, then `movePip(to:)`, then `syncBorder(around:)`.
+4. Use the shared infrastructure:
+   - **Collision:** Use `GameBase.rectsCollide()`, `circleHitsRect()`, `distance()`, `pointInRect()` instead of inline collision code.
+   - **Layers:** Use `layerPool.dequeue()` / `layerPool.enqueue()` for hot-path layer creation/destruction.
+   - **Sound:** Call `SoundKit.shared.play(.hit)` etc. for audio feedback.
+   - **Sprites:** If the game has pixel-art assets, extract them into `daemon/Games/Sprites/MyGameSprites.swift` as static `CGImage?` constants.
+   - **Game state:** Use `state` (`GameState` enum) with `triggerGameOver(message:)` and `checkGameOverTimeout()`.
+5. Register the singleton in `DodgeDaemon.tick()` active-game guard list.
+6. Add the game toggle to `ControlServer.routeRequest()` and expose it in the extension popup.

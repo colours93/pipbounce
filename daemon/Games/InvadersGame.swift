@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-let invaders = InvadersGame()
+
 
 class InvadersGame: GameBase {
 
@@ -115,110 +115,7 @@ class InvadersGame: GameBase {
     private var animTickCounter = 0
     private let animTicksPerFrame = 30  // swap frames every ~240ms at 8ms tick
 
-    // MARK: - Pixel Art Sprites
-
-    private enum Sprites {
-        // --- Scout Drone (11x8, 2 frames) - Angular delta-wing with green engine glow ---
-        static let squidFrame1: CGImage? = GameBase.renderPixelArt([
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0xFFFFFF, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x0A2A0A, 0x44FF66, 0x0A2A0A, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x0A2A0A, 0x1A4A1A, 0x00FF44, 0x1A4A1A, 0x0A2A0A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x00FF44, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x000000, 0x000000],
-            [0x000000, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x44FF66, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x000000],
-            [0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x1A4A1A, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A],
-            [0x000000, 0x0A2A0A, 0x000000, 0x000000, 0x00FF44, 0x44FF66, 0x00FF44, 0x000000, 0x000000, 0x0A2A0A, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x00FF44, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-        ], scale: 3)
-
-        static let squidFrame2: CGImage? = GameBase.renderPixelArt([
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x44FF66, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x0A2A0A, 0xFFFFFF, 0x0A2A0A, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x0A2A0A, 0x1A4A1A, 0x44FF66, 0x1A4A1A, 0x0A2A0A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x00FF44, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x000000, 0x000000],
-            [0x000000, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x00FF44, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x000000],
-            [0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A, 0x1A4A1A, 0x0A2A0A, 0x1A4A1A, 0x2A6A2A, 0x1A4A1A, 0x0A2A0A],
-            [0x000000, 0x0A2A0A, 0x000000, 0x00FF44, 0x000000, 0x00FF44, 0x000000, 0x00FF44, 0x000000, 0x0A2A0A, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x00FF44, 0x44FF66, 0x00FF44, 0x000000, 0x000000, 0x000000, 0x000000],
-        ], scale: 3)
-
-        // --- Heavy Fighter (11x8, 2 frames) - Wide armored gunship with teal/cyan palette ---
-        static let crabFrame1: CGImage? = GameBase.renderPixelArt([
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x0A2A2A, 0xFFFFFF, 0x0A2A2A, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x00FFEE, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x000000],
-            [0x00FFEE, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x44FFFF, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x00FFEE],
-            [0x44FFFF, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x00FFEE, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x44FFFF],
-            [0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A],
-            [0x000000, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x00FFEE, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x000000],
-            [0x000000, 0x000000, 0x00FFEE, 0x000000, 0x000000, 0x44FFFF, 0x000000, 0x000000, 0x00FFEE, 0x000000, 0x000000],
-        ], scale: 3)
-
-        static let crabFrame2: CGImage? = GameBase.renderPixelArt([
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x0A2A2A, 0xFFFFFF, 0x0A2A2A, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x44FFFF, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x000000],
-            [0x44FFFF, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x00FFEE, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x44FFFF],
-            [0x00FFEE, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x44FFFF, 0x2A6A6A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x00FFEE],
-            [0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x1A4A4A, 0x2A6A6A, 0x1A4A4A, 0x0A2A2A],
-            [0x000000, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x000000, 0x44FFFF, 0x000000, 0x0A2A2A, 0x1A4A4A, 0x0A2A2A, 0x000000],
-            [0x000000, 0x000000, 0x44FFFF, 0x000000, 0x000000, 0x00FFEE, 0x000000, 0x000000, 0x44FFFF, 0x000000, 0x000000],
-        ], scale: 3)
-
-        // --- Command Ship (11x8, 2 frames) - Crown silhouette with red eye, purple/magenta ---
-        static let skullFrame1: CGImage? = GameBase.renderPixelArt([
-            [0x5A2A6A, 0x000000, 0x000000, 0x5A2A6A, 0x000000, 0xAA44FF, 0x000000, 0x5A2A6A, 0x000000, 0x000000, 0x5A2A6A],
-            [0x3A1A4A, 0x5A2A6A, 0x000000, 0x3A1A4A, 0x5A2A6A, 0xFFFFFF, 0x5A2A6A, 0x3A1A4A, 0x000000, 0x5A2A6A, 0x3A1A4A],
-            [0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0xAA44FF, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A],
-            [0x000000, 0x1A0A2A, 0x3A1A4A, 0xFF3333, 0xFF6666, 0x3A1A4A, 0xFF6666, 0xFF3333, 0x3A1A4A, 0x1A0A2A, 0x000000],
-            [0x000000, 0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0xAA44FF, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A, 0x000000],
-            [0x000000, 0x000000, 0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x1A0A2A, 0x3A1A4A, 0xAA44FF, 0x3A1A4A, 0x1A0A2A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x1A0A2A, 0xAA44FF, 0x1A0A2A, 0x000000, 0x000000, 0x000000, 0x000000],
-        ], scale: 3)
-
-        static let skullFrame2: CGImage? = GameBase.renderPixelArt([
-            [0x5A2A6A, 0x000000, 0x000000, 0x5A2A6A, 0x000000, 0xFFFFFF, 0x000000, 0x5A2A6A, 0x000000, 0x000000, 0x5A2A6A],
-            [0x3A1A4A, 0x5A2A6A, 0x000000, 0x3A1A4A, 0x5A2A6A, 0xAA44FF, 0x5A2A6A, 0x3A1A4A, 0x000000, 0x5A2A6A, 0x3A1A4A],
-            [0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0xFFFFFF, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A],
-            [0x000000, 0x1A0A2A, 0x3A1A4A, 0xFF6666, 0xFF3333, 0x3A1A4A, 0xFF3333, 0xFF6666, 0x3A1A4A, 0x1A0A2A, 0x000000],
-            [0x000000, 0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0xFFFFFF, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A, 0x000000],
-            [0x000000, 0x000000, 0x1A0A2A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x5A2A6A, 0x3A1A4A, 0x1A0A2A, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x1A0A2A, 0xAA44FF, 0x3A1A4A, 0xAA44FF, 0x1A0A2A, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0xAA44FF, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-        ], scale: 3)
-
-        // --- Mothership (16x8) - Imposing disc with hull plating, cyan viewports, orange power core ---
-        static let ufo: CGImage? = GameBase.renderPixelArt([
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x886644, 0xAA8866, 0xAA8866, 0x886644, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x886644, 0xAA8866, 0xBB9977, 0xFF4400, 0xFF4400, 0xBB9977, 0xAA8866, 0x886644, 0x000000, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x886644, 0xAA8866, 0xBB9977, 0xAA8866, 0xFF6622, 0xFF6622, 0xAA8866, 0xBB9977, 0xAA8866, 0x886644, 0x000000, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x886644, 0xAA8866, 0x00FFEE, 0xAA8866, 0x00FFEE, 0xBB9977, 0xBB9977, 0x00FFEE, 0xAA8866, 0x00FFEE, 0xAA8866, 0x886644, 0x000000, 0x000000],
-            [0x000000, 0x886644, 0xAA8866, 0xBB9977, 0xAA8866, 0xBB9977, 0xAA8866, 0xFF4400, 0xFF4400, 0xAA8866, 0xBB9977, 0xAA8866, 0xBB9977, 0xAA8866, 0x886644, 0x000000],
-            [0x886644, 0xAA8866, 0xBB9977, 0xAA8866, 0x00FFEE, 0x886644, 0xAA8866, 0xBB9977, 0xBB9977, 0xAA8866, 0x886644, 0x00FFEE, 0xAA8866, 0xBB9977, 0xAA8866, 0x886644],
-            [0x000000, 0x000000, 0x886644, 0x000000, 0x000000, 0x886644, 0x000000, 0xFF4400, 0xFF4400, 0x000000, 0x886644, 0x000000, 0x000000, 0x886644, 0x000000, 0x000000],
-            [0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0xFF6622, 0xFF6622, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000],
-        ], scale: 3)
-
-        // --- Player bullet (2x6) - Bright green core, lighter edges, glow ---
-        static let playerBullet: CGImage? = GameBase.renderPixelArt([
-            [0x88FFAA, 0x88FFAA],
-            [0x44DD66, 0x44DD66],
-            [0x00FF44, 0x00FF44],
-            [0x00FF44, 0x00FF44],
-            [0x44DD66, 0x44DD66],
-            [0x88FFAA, 0x88FFAA],
-        ], scale: 3)
-
-        // --- Alien bullet (2x6) - Red core, orange edges ---
-        static let alienBullet: CGImage? = GameBase.renderPixelArt([
-            [0xFF8844, 0xFF8844],
-            [0xFF4422, 0xFF4422],
-            [0xDD1100, 0xDD1100],
-            [0xDD1100, 0xDD1100],
-            [0xFF4422, 0xFF4422],
-            [0xFF8844, 0xFF8844],
-        ], scale: 3)
-    }
+    // MARK: - Pixel Art Sprites (see InvadersSprites.swift)
 
     private func spriteType(forRow row: Int) -> Int {
         switch row {
@@ -231,9 +128,9 @@ class InvadersGame: GameBase {
     private func spriteImage(forRow row: Int, frame: Int) -> CGImage? {
         let f = frame % 2
         switch spriteType(forRow: row) {
-        case 0:  return f == 0 ? Sprites.squidFrame1 : Sprites.squidFrame2
-        case 1:  return f == 0 ? Sprites.crabFrame1  : Sprites.crabFrame2
-        default: return f == 0 ? Sprites.skullFrame1  : Sprites.skullFrame2
+        case 0:  return f == 0 ? InvadersSprites.squidFrame1 : InvadersSprites.squidFrame2
+        case 1:  return f == 0 ? InvadersSprites.crabFrame1  : InvadersSprites.crabFrame2
+        default: return f == 0 ? InvadersSprites.skullFrame1  : InvadersSprites.skullFrame2
         }
     }
 
@@ -251,7 +148,7 @@ class InvadersGame: GameBase {
         let w: CGFloat = 48  // 16 * 3
         let h: CGFloat = 24  // 8 * 3
         layer.bounds = CGRect(origin: .zero, size: CGSize(width: w, height: h))
-        layer.contents = Sprites.ufo
+        layer.contents = InvadersSprites.ufo
         layer.magnificationFilter = .nearest
         layer.minificationFilter = .nearest
         return layer
@@ -326,9 +223,8 @@ class InvadersGame: GameBase {
         spawnAlienGrid(rootLayer: rootLayer)
 
         // Score overlay (wider for wave + lives)
-        createScoreOverlay(screen: screen, width: 200)
-        scoreLabel?.font = NSFont.monospacedSystemFont(ofSize: 20, weight: .bold)
-        scoreLabel?.stringValue = "W1  \(livesString())  0"
+        createScoreOverlay(screen: screen, width: 180)
+        scoreLabel?.attributedStringValue = Self.styledScore("W1  \(livesString())  0")
     }
 
     private func spawnAlienGrid(rootLayer: CALayer) {
@@ -347,7 +243,7 @@ class InvadersGame: GameBase {
     }
 
     private func updateScoreDisplay() {
-        scoreLabel?.stringValue = "W\(wave)  \(livesString())  \(score)"
+        scoreLabel?.attributedStringValue = Self.styledScore("W\(wave)  \(livesString())  \(score)")
     }
 
     // MARK: - Wave System
@@ -366,7 +262,7 @@ class InvadersGame: GameBase {
         aliveCount = 0
 
         // Clear bullets
-        for b in bullets { b.layer.removeFromSuperlayer() }
+        for b in bullets { layerPool.enqueue(b.layer); b.layer.removeFromSuperlayer() }
         bullets = []
 
         // Reset grid
@@ -517,7 +413,7 @@ class InvadersGame: GameBase {
                     y: gridY + CGFloat(row) * (alienH + spacingY),
                     width: alienW, height: alienH)
 
-                if bRect.intersects(aRect) {
+                if Self.rectsCollide(bRect, aRect) {
                     let killX = aRect.midX
                     let killY = aRect.midY
                     let points = rowPoints[row]
@@ -527,6 +423,7 @@ class InvadersGame: GameBase {
                     aliveCount -= 1
                     score += points
 
+                    layerPool.enqueue(bullets[bi].layer)
                     bullets[bi].layer.removeFromSuperlayer()
                     bullets.remove(at: bi)
 
@@ -550,7 +447,7 @@ class InvadersGame: GameBase {
             if !hit && ufoActive, bi < bullets.count, bullets[bi].isPlayer {
                 let ufoRect = CGRect(x: ufoX, y: ufoY, width: 48, height: 24)
                 let bRect2 = CGRect(x: bullets[bi].x, y: bullets[bi].y, width: bulletW, height: bulletH)
-                if bRect2.intersects(ufoRect) {
+                if Self.rectsCollide(bRect2, ufoRect) {
                     let ufoPoints = [50, 100, 150, 300].randomElement()!
                     score += ufoPoints
                     spawnExplosion(x: ufoX + 24, y: ufoY + 12,
@@ -559,6 +456,7 @@ class InvadersGame: GameBase {
                     ufoLayer?.removeFromSuperlayer()
                     ufoLayer = nil
                     ufoActive = false
+                    layerPool.enqueue(bullets[bi].layer)
                     bullets[bi].layer.removeFromSuperlayer()
                     bullets.remove(at: bi)
                     updateScoreDisplay()
@@ -572,7 +470,8 @@ class InvadersGame: GameBase {
             for bi in (0..<bullets.count).reversed() {
                 guard !bullets[bi].isPlayer else { continue }
                 let bRect = CGRect(x: bullets[bi].x, y: bullets[bi].y, width: bulletW, height: bulletH)
-                if bRect.intersects(shipRect) {
+                if Self.rectsCollide(bRect, shipRect) {
+                    layerPool.enqueue(bullets[bi].layer)
                     bullets[bi].layer.removeFromSuperlayer()
                     bullets.remove(at: bi)
                     hitPlayer(now: now, screen: screen)
@@ -592,7 +491,10 @@ class InvadersGame: GameBase {
         // --- Remove off-screen bullets ---
         bullets.removeAll { b in
             let offscreen = b.y < -20 || b.y > screen.maxY + 20
-            if offscreen { b.layer.removeFromSuperlayer() }
+            if offscreen {
+                layerPool.enqueue(b.layer)
+                b.layer.removeFromSuperlayer()
+            }
             return offscreen
         }
 
@@ -605,46 +507,43 @@ class InvadersGame: GameBase {
         // --- Update visuals ---
         let bounds = CGRect(origin: CGPoint(x: shipX, y: shipY), size: size)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        withTransaction {
+            // Update alien positions and animation frames
+            for (i, alien) in aliens.enumerated() where alien.alive {
+                let row = i / cols
+                let col = i % cols
+                let ax = gridX + CGFloat(col) * (alienW + spacingX)
+                let ay = gridY + CGFloat(row) * (alienH + spacingY)
+                alien.layer.frame = CGRect(x: ax, y: screenH - ay - alienH, width: alienW, height: alienH)
+                alien.layer.contents = spriteImage(forRow: row, frame: animFrame)
+            }
 
-        // Update alien positions and animation frames
-        for (i, alien) in aliens.enumerated() where alien.alive {
-            let row = i / cols
-            let col = i % cols
-            let ax = gridX + CGFloat(col) * (alienW + spacingX)
-            let ay = gridY + CGFloat(row) * (alienH + spacingY)
-            alien.layer.frame = CGRect(x: ax, y: screenH - ay - alienH, width: alienW, height: alienH)
-            alien.layer.contents = spriteImage(forRow: row, frame: animFrame)
-        }
+            // Update bullet positions
+            for b in bullets {
+                b.layer.frame = CGRect(x: b.x, y: screenH - b.y - bulletH, width: bulletW, height: bulletH)
+            }
 
-        // Update bullet positions
-        for b in bullets {
-            b.layer.frame = CGRect(x: b.x, y: screenH - b.y - bulletH, width: bulletW, height: bulletH)
-        }
+            // Update UFO position
+            if ufoActive, let ufo = ufoLayer {
+                ufo.frame = CGRect(x: ufoX, y: screenH - ufoY - 14, width: 48, height: 24)
+            }
 
-        // Update UFO position
-        if ufoActive, let ufo = ufoLayer {
-            ufo.frame = CGRect(x: ufoX, y: screenH - ufoY - 14, width: 48, height: 24)
-        }
+            // Update particle positions
+            for p in particles {
+                p.layer.position = CGPoint(x: p.x, y: screenH - p.y)
+                p.layer.opacity = Float(p.life / p.maxLife)
+            }
 
-        // Update particle positions
-        for p in particles {
-            p.layer.position = CGPoint(x: p.x, y: screenH - p.y)
-            p.layer.opacity = Float(p.life / p.maxLife)
-        }
-
-        // Border — blink border during invulnerability instead of moving PiP offscreen
-        let blinkHidden = invulnerable && blinkTimer % 8 < 4
-        if settings.glow, let border = borderRef {
-            if blinkHidden {
-                border.hide()
-            } else {
-                border.show(around: bounds)
+            // Border — blink border during invulnerability instead of moving PiP offscreen
+            let blinkHidden = invulnerable && blinkTimer % 8 < 4
+            if settings.glow, let border = borderRef {
+                if blinkHidden {
+                    border.hide()
+                } else {
+                    border.show(around: bounds)
+                }
             }
         }
-
-        CATransaction.commit()
 
         lastBounds = bounds
     }
@@ -656,8 +555,8 @@ class InvadersGame: GameBase {
 
     private func spawnBullet(x: CGFloat, y: CGFloat, dy: CGFloat, isPlayer: Bool) {
         guard let rootLayer = overlayLayer else { return }
-        let layer = CALayer()
-        layer.contents = isPlayer ? Sprites.playerBullet : Sprites.alienBullet
+        let layer = layerPool.dequeue()
+        layer.contents = isPlayer ? InvadersSprites.playerBullet : InvadersSprites.alienBullet
         layer.magnificationFilter = .nearest
         layer.minificationFilter = .nearest
         layer.frame = CGRect(x: x, y: screenH - y - bulletH, width: bulletW, height: bulletH)
@@ -669,7 +568,7 @@ class InvadersGame: GameBase {
         guard let rootLayer = overlayLayer else { return }
         let count = Int.random(in: 8...14)
         for _ in 0..<count {
-            let layer = CALayer()
+            let layer = layerPool.dequeue()
             let s: CGFloat = CGFloat.random(in: 2...5)
             layer.bounds = CGRect(origin: .zero, size: CGSize(width: s, height: s))
             layer.backgroundColor = color.cgColor
@@ -721,6 +620,7 @@ class InvadersGame: GameBase {
             particles[i].y += particles[i].vy * dt
             particles[i].life -= dt
             if particles[i].life <= 0 {
+                layerPool.enqueue(particles[i].layer)
                 particles[i].layer.removeFromSuperlayer()
                 particles.remove(at: i)
             }

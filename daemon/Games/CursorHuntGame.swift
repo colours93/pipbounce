@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-let cursorhunt = CursorHuntGame()
+
 
 class CursorHuntGame: GameBase {
 
@@ -45,7 +45,7 @@ class CursorHuntGame: GameBase {
         if Thread.isMainThread { setup() }
         else { DispatchQueue.main.sync { setup() } }
 
-        scoreLabel?.stringValue = "0.0s"
+        scoreLabel?.attributedStringValue = Self.styledScore("0.0s")
         print("Cursor Hunt started")
     }
 
@@ -166,7 +166,7 @@ class CursorHuntGame: GameBase {
         // Survival time
         let now = mach_absolute_time()
         survivalTime = machToSeconds(now - startMach)
-        scoreLabel?.stringValue = String(format: "%.1fs", survivalTime)
+        scoreLabel?.attributedStringValue = Self.styledScore(String(format: "%.1fs", survivalTime))
 
         // Ramp difficulty — logarithmic curve so it keeps getting harder past 28s
         let rampT = log(1 + survivalTime * 0.15) / log(1 + 30 * 0.15)  // normalized 0..~1 at 30s
@@ -180,7 +180,7 @@ class CursorHuntGame: GameBase {
         let pipCenter = CGPoint(x: position.x + size.width / 2, y: position.y + size.height / 2)
         let dx = mousePos.x - pipCenter.x
         let dy = mousePos.y - pipCenter.y
-        let dist = sqrt(dx * dx + dy * dy)
+        let dist = Self.distance(mousePos, pipCenter)
 
         if dist > 1 {
             velocity.x += (dx / dist) * baseAccel * dt
@@ -188,8 +188,8 @@ class CursorHuntGame: GameBase {
         }
 
         // Friction
-        velocity.x *= friction
-        velocity.y *= friction
+        velocity.x *= pow(friction, dt * 500)
+        velocity.y *= pow(friction, dt * 500)
 
         // Clamp speed
         let speed = sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
@@ -208,7 +208,7 @@ class CursorHuntGame: GameBase {
 
         // Collision: cursor inside PiP
         let pipRect = CGRect(origin: position, size: size).insetBy(dx: 4, dy: 4)
-        if pipRect.contains(mousePos) {
+        if Self.pointInRect(mousePos, pipRect) {
             triggerGameOver(message: String(format: "CAUGHT %.1fs", survivalTime))
             print("Cursor Hunt game over: \(survivalTime)s")
         }
@@ -229,18 +229,15 @@ class CursorHuntGame: GameBase {
         // Border
         let bounds = CGRect(origin: position, size: size)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        syncBorder(around: bounds)
-        if speed > 20 {
-            let targetTilt = atan2(velocity.y, velocity.x) * 0.4
-            tiltAngle += (targetTilt - tiltAngle) * 0.2
-        } else {
-            tiltAngle *= 0.9
+        withTransaction {
+            syncBorder(around: bounds)
+            if speed > 20 {
+                let targetTilt = atan2(velocity.y, velocity.x) * 0.4
+                tiltAngle += (targetTilt - tiltAngle) * (1.0 - pow(1.0 - 0.2, dt * 500))
+            } else {
+                tiltAngle *= pow(0.9, dt * 500)
+            }
+            borderRef?.tilt(tiltAngle)
         }
-        borderRef?.tilt(tiltAngle)
-
-        CATransaction.commit()
     }
 }

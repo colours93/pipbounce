@@ -1,5 +1,6 @@
 import Cocoa
 import ApplicationServices
+import UserNotifications
 
 class PipBounceDaemon {
     private var lastDodgeTime = Date.distantPast
@@ -26,11 +27,38 @@ class PipBounceDaemon {
         return info
     }()
 
-    func start() {
-        if !AXIsProcessTrusted() {
-            print("Accessibility permission not granted — add this app in System Settings > Privacy > Accessibility")
-        }
+    private var accessibilityPollTimer: DispatchSourceTimer?
+    private var onboardingWindow: OnboardingWindow?
 
+    func start() {
+        if AXIsProcessTrusted() {
+            finishStart()
+        } else {
+            print("Accessibility permission not granted — waiting for grant…")
+            let onboarding = OnboardingWindow()
+            onboardingWindow = onboarding
+            onboarding.show()
+            startAccessibilityPoll()
+        }
+    }
+
+    private func startAccessibilityPoll() {
+        let t = DispatchSource.makeTimerSource(queue: .main)
+        t.schedule(deadline: .now() + 3, repeating: 3)
+        t.setEventHandler { [weak self] in
+            if AXIsProcessTrusted() {
+                self?.accessibilityPollTimer?.cancel()
+                self?.accessibilityPollTimer = nil
+                self?.onboardingWindow = nil
+                print("Accessibility permission granted")
+                self?.finishStart()
+            }
+        }
+        t.resume()
+        accessibilityPollTimer = t
+    }
+
+    private func finishStart() {
         installHotkey()
         print("pipbounce daemon started")
 
@@ -39,6 +67,24 @@ class PipBounceDaemon {
         t.setEventHandler { [weak self] in self?.tick() }
         t.resume()
         tickTimer = t
+    }
+
+    private func showAccessibilityNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "PipBounce"
+            content.body = "Accessibility access required. Opening System Settings…"
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: "accessibility", content: content, trigger: nil)
+            center.add(request)
+        }
+    }
+
+    private func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 
     private func quickCheck(_ element: AXUIElement) -> PipWindowInfo? {
@@ -58,10 +104,7 @@ class PipBounceDaemon {
     }
 
     private func tick() {
-        if pipong.active || pipong2.active || flappy.active || bounce.active || invaders.active
-            || frogger.active || runner.active || snake.active
-            || breakout.active || asteroids.active || cursorhunt.active
-            || doodlejump.active || pacman.active || animating { return }
+        if Games.anyActive || animating { return }
 
         guard let event = CGEvent(source: nil) else { return }
         let mousePos = event.location
@@ -171,8 +214,7 @@ class PipBounceDaemon {
     }
 
     func toggleGame(_ game: MiniGame) {
-        let allGames: [MiniGame] = [pipong, pipong2, flappy, bounce, invaders, frogger, runner, snake, breakout, asteroids, cursorhunt, doodlejump, pacman]
-        for g in allGames where g.active {
+        for g in Games.all.values where g.active {
             g.stop()
             rgbBorder.tilt(0)
             rgbBorder.hide()

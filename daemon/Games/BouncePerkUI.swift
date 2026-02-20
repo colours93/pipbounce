@@ -228,16 +228,15 @@ class BouncePerkUI {
                     glassView.setValue(tint, forKey: "tintColor")
                 } else {
                     // Fallback: layer border
-                    CATransaction.begin()
-                    CATransaction.setDisableActions(true)
-                    if isHovered {
-                        glassView.layer?.borderColor = offering[i].color.withAlphaComponent(0.6).cgColor
-                        glassView.layer?.borderWidth = 1.5
-                    } else {
-                        glassView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
-                        glassView.layer?.borderWidth = 0.5
+                    withTransaction {
+                        if isHovered {
+                            glassView.layer?.borderColor = offering[i].color.withAlphaComponent(0.6).cgColor
+                            glassView.layer?.borderWidth = 1.5
+                        } else {
+                            glassView.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+                            glassView.layer?.borderWidth = 0.5
+                        }
                     }
-                    CATransaction.commit()
                 }
             }
         }

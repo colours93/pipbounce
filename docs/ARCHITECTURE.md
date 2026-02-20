@@ -1,6 +1,6 @@
 # pipbounce — Architecture
 
-![version](https://img.shields.io/badge/version-1.x-blue) ![last updated](https://img.shields.io/badge/updated-2026--02--19-brightgreen)
+![version](https://img.shields.io/badge/version-2.0-blue) ![last updated](https://img.shields.io/badge/updated-2026--02--20-brightgreen)
 
 pipbounce is a macOS background daemon plus a Chrome extension that makes Picture-in-Picture windows dodge the mouse cursor and doubles as a retro arcade platform. This document covers the overall system architecture, daemon internals, and process lifecycle. For detailed treatment of the dodge algorithm and PiP detection see [DODGE-SYSTEM.md](./DODGE-SYSTEM.md); for the game engine and all thirteen game modes see [GAME-ENGINE.md](./GAME-ENGINE.md); for the glow border and sacred geometry burst system see [RGB-BORDER.md](./RGB-BORDER.md); for the HTTP API see [API-REFERENCE.md](./API-REFERENCE.md).
 
@@ -57,9 +57,12 @@ graph TB
         HK["Hotkey\nCGEvent.tapCreate\ncgSessionEventTap\nkeyDown mask\nEvent consume on match"]
         RGB["RGBBorder\nNSWindow floating overlay\nCAGradientLayer conic spin 3s\nCAShapeLayer even-odd mask\nBurst geometry animation"]
         SET["Settings singleton\nenabled / cooldown / margin\ncornerSize / glow / glowColor\nhotkeyCode / hotkeyFlags\nin-memory not persisted"]
-        GAMES["13 Game Engines\nGameBase DispatchSourceTimer\nPong / Flappy / Snake / Bounce\nBreakout / Invaders / Frogger\nRunner / Asteroids / CursorHunt\nDoodleJump / PacMan"]
+        SK["SoundKit singleton\n5 SFX → NSSound mapping\nhit / score / death / shoot / bounce\nPreloaded at daemon startup"]
+        LP["LayerPool\nCALayer recycler per game\ndequeue / enqueue / drain\nZero-alloc hot path"]
+        GAMES["14 Game Modes\nGameBase + GameState enum\nCollision helpers (4 static methods)\nDispatchSourceTimer 2-8ms\n10 Sprite enum files"]
         MAIN -->|"ControlServer.start()"| SRV
         MAIN -->|"PipBounceDaemon.start()"| DD
+        MAIN -->|"SoundKit.shared.preload()"| SK
         DD -->|"findPipWindow() / quickCheck()"| DISC
         DD -->|"getFurthestCorner()"| GEOM
         DD -->|"show / hide / tilt"| RGB
@@ -67,6 +70,8 @@ graph TB
         SRV -->|"applySettings()"| SET
         SRV -->|"toggleGame() via main-queue semaphore"| GAMES
         GAMES -->|"movePip() / syncBorder()"| RGB
+        GAMES -->|"SoundKit.shared.play(.sfx)"| SK
+        GAMES -->|"layerPool.dequeue() / enqueue()"| LP
     end
 
     subgraph SYS["macOS System APIs"]
@@ -87,7 +92,7 @@ graph TB
     RGB -->|"NSWindow borderless floating\nignoresMouseEvents canJoinAllSpaces"| WS
 
     class BG,CS,AP,POPUP,PIP chrome
-    class MAIN,SRV,DD,DISC,GEOM,HK,RGB,SET,GAMES daemon
+    class MAIN,SRV,DD,DISC,GEOM,HK,RGB,SET,SK,LP,GAMES daemon
     class AX,CGE,WS macos
 ```
 
@@ -121,9 +126,13 @@ writePid()                — create ~/.pipbounce/ if needed
                           — write getpid() to the PID file
 
 NSApplication.shared      — initialize Cocoa run loop infrastructure
+setActivationPolicy(.accessory)
+
+settings.load()           — load persisted settings from disk
+SoundKit.shared.preload() — map 5 SFX to system NSSound instances
 
 ControlServer().start()   — bind :51789, start accept loop on global(.utility)
-PipBounceDaemon().start() — installHotkey() + schedule 1/60s timer
+PipBounceDaemon().start() — check AXIsProcessTrusted(), installHotkey() + DispatchSourceTimer 16ms
 
 signal(SIGINT)  { cleanup(); exit(0) }
 signal(SIGTERM) { cleanup(); exit(0) }
@@ -199,6 +208,8 @@ The daemon is composed of eight cooperating subsystems. The table below summariz
 | `Hotkey` | `Hotkey.swift` | Global keyboard event tap | Mutates `settings.enabled` directly |
 | `RGBBorder` | `RGBBorder.swift` | Floating overlay NSWindow, CALayer rendering, burst geometry | Called by `PipBounceDaemon` and game engines |
 | `Settings` | `Settings.swift` | All runtime configuration | Global `let settings = Settings()` instance |
+| `SoundKit` | `SoundKit.swift` | Sound effects (5 SFX → NSSound) | Singleton `SoundKit.shared`; preloaded at startup; called by game engines |
+| `LayerPool` | `Games/LayerPool.swift` | CALayer recycling | One instance per `GameBase`; `dequeue()`/`enqueue()`/`drain()` |
 
 ### Dodge animation
 
@@ -218,11 +229,11 @@ The Mach time API (`mach_absolute_time` + `mach_timebase_info`) is used instead 
 
 `PipBounceDaemon.toggleGame(_ game: MiniGame)` is the single entry point for starting and stopping game engines. It is always called on the main queue (dispatched from `ControlServer` via `DispatchSemaphore`). The method:
 
-1. Iterates over all 12 game singletons and stops any that are currently active
+1. Iterates over all 13 game singletons (including both PiPong variants) and stops any that are currently active
 2. Resets the border tilt and hides the border
 3. If the requested game was not already active, calls `game.start(screen:pip:border:)`
 
-This ensures only one game runs at a time and that the dodge timer is free to resume when all games are stopped.
+This ensures only one game runs at a time and that the dodge timer is free to resume when all games are stopped. On stop, `GameBase.stop()` also calls `layerPool.drain()` to release all recycled `CALayer` objects, preventing memory accumulation across game sessions.
 
 ---
 
@@ -275,9 +286,10 @@ flowchart TD
     LCH["launchd executes binary\n~/.pipbounce/pipbounce.app\n  Contents/MacOS/pipbounce"] --> UB["setbuf stdout nil\nsetbuf stderr nil\nUnbuffered for launchd log capture"]
     UB --> KE["killExisting()\nRead ~/.pipbounce/pipbounce.pid\nSIGTERM old PID if different from getpid()\nusleep 300ms"]
     KE --> WP["writePid()\nCreate ~/.pipbounce/ directory\nWrite getpid() atomically"]
-    WP --> NA["NSApplication.shared\nInitialize Cocoa event loop infrastructure"]
-    NA --> CS["ControlServer.start()\nCreate AF_INET SOCK_STREAM socket\nSO_REUSEADDR\nBind 127.0.0.1:51789\nlisten(5)\nAccept loop on DispatchQueue.global(.utility)"]
-    CS --> DS["PipBounceDaemon.start()\nCheck AXIsProcessTrusted()\ninstallHotkey()\nSchedule Timer 1/60s on main RunLoop"]
+    WP --> NA["NSApplication.shared\nsetActivationPolicy(.accessory)"]
+    NA --> PRE["settings.load()\nSoundKit.shared.preload()\nMap 5 SFX → NSSound"]
+    PRE --> CS["ControlServer.start()\nCreate AF_INET SOCK_STREAM socket\nSO_REUSEADDR\nBind 127.0.0.1:51789\nlisten(5)\nAccept loop on DispatchQueue.global(.utility)"]
+    CS --> DS["PipBounceDaemon.start()\nCheck AXIsProcessTrusted()\ninstallHotkey()\nDispatchSourceTimer 16ms strict"]
 
     subgraph HKS["Global Hotkey (CGEvent tap)"]
         HK1["CGEvent.tapCreate\ncgSessionEventTap headInsertEventTap\nkeyDown event mask"]
@@ -293,7 +305,7 @@ flowchart TD
     DS --> SIG["Register signal handlers\nsignal SIGINT  { cleanup(); exit(0) }\nsignal SIGTERM { cleanup(); exit(0) }"]
     SIG --> RL["RunLoop.main.run()\nBlock forever\nDrives timer + CGEvent tap source"]
 
-    RL -->|"every 1/60s"| TICK["PipBounceDaemon.tick()\nMouse poll + PiP discovery\nDodge logic"]
+    RL -->|"every 16ms"| TICK["PipBounceDaemon.tick()\nMouse poll + PiP discovery\nDodge logic"]
     RL -->|"HTTP request arrives"| REQ["ControlServer.handleClient(fd)\nParse HTTP request\nRoute to handler\nWrite JSON response"]
     RL -->|"SIGTERM or SIGINT"| SHUT["cleanup()\nRemove ~/.pipbounce/pipbounce.pid\nexit(0)"]
     SHUT --> LCD["launchd KeepAlive\nRestarts process automatically\nif unexpected exit or /restart"]
@@ -335,12 +347,105 @@ The installer calls `tccutil reset Accessibility com.pipbounce.daemon` to clear 
 
 ---
 
+## Production Infrastructure
+
+### SoundKit
+
+`SoundKit` is a singleton that maps the `SFX` enum to macOS system `NSSound` instances. It is preloaded during daemon startup (`main.swift`) so the first play call in a game session has zero latency. Games call `SoundKit.shared.play(.hit)` — if the sound is already playing, it is stopped and restarted from the beginning.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#00ff88', 'edgeLabelBackground': '#111', 'clusterBkg': '#0d0d14', 'clusterBorder': '#2a2a3a', 'titleColor': '#fafafa', 'nodeTextColor': '#fafafa'}}}%%
+flowchart LR
+    classDef sfx fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef sound fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef game fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    HIT[".hit"]:::sfx -->|"Tink"| NS["NSSound"]:::sound
+    SCORE[".score"]:::sfx -->|"Pop"| NS
+    DEATH[".death"]:::sfx -->|"Basso"| NS
+    SHOOT[".shoot"]:::sfx -->|"Funk"| NS
+    BOUNCE[".bounce"]:::sfx -->|"Purr"| NS
+
+    PONG["PongGame"]:::game -->|".hit / .score"| HIT
+    INV["InvadersGame"]:::game -->|".shoot / .death"| SHOOT
+    BREAK["BreakoutGame"]:::game -->|".hit / .bounce"| HIT
+```
+
+### LayerPool
+
+Each `GameBase` instance owns a `LayerPool` — a simple LIFO stack of recycled `CALayer` objects. Games that create and destroy layers frequently (Snake tail segments, Invaders alien grid, Breakout brick destruction, Asteroids debris) use `layerPool.dequeue()` instead of `CALayer()` and `layerPool.enqueue(layer)` when layers are released.
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111', 'clusterBkg': '#0d0d14', 'clusterBorder': '#2a2a3a', 'titleColor': '#fafafa', 'nodeTextColor': '#fafafa'}}}%%
+flowchart TD
+    classDef pool fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef action fill:#0a3520,stroke:#00ff88,color:#00ff88
+    classDef reset fill:#3a0a15,stroke:#ff4d6d,color:#ff4d6d
+
+    DEQ["dequeue()"]:::action --> CHK{"pool empty?"}:::pool
+    CHK -->|"no"| POP["popLast()\nisHidden = false\nreturn layer"]:::action
+    CHK -->|"yes"| NEW["CALayer()\nreturn fresh"]:::action
+
+    ENQ["enqueue(layer)"]:::action --> CLEAN["removeAllAnimations()\ncontents = nil\nsublayers = nil\nisHidden = true\nopacity = 1.0\ntransform = identity\nbackgroundColor = nil\nborderWidth = 0\ncornerRadius = 0\nremoveFromSuperlayer()"]:::reset
+    CLEAN --> PUSH["pool.append(layer)"]:::pool
+
+    DRAIN["drain()"]:::reset --> CLEAR["pool.removeAll()"]:::reset
+```
+
+`enqueue()` fully resets each layer (clearing contents, sublayers, animations, opacity, transform, background, border, and corner radius) before returning it to the pool. `drain()` is called in `GameBase.stop()` to free all pooled layers at end of game.
+
+### GameState Enum
+
+The `GameState` enum (`ready`, `playing`, `gameOver`) replaces the previous bare `Bool gameOver` flag on `GameBase`. All games now use `state: GameState` with `triggerGameOver(message:)` setting `state = .gameOver` and `checkGameOverTimeout()` reading the enum. This provides a cleaner three-phase lifecycle: pre-game setup → active play → game-over delay → auto-stop.
+
+### Collision Helpers
+
+Four static methods on `GameBase` standardize collision detection across all 14 game modes:
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#111', 'clusterBkg': '#0d0d14', 'clusterBorder': '#2a2a3a', 'titleColor': '#fafafa', 'nodeTextColor': '#fafafa'}}}%%
+graph LR
+    classDef method fill:#0a2540,stroke:#00fff5,color:#00fff5
+    classDef desc fill:#1a0a3e,stroke:#b44dff,color:#b44dff
+
+    R["rectsCollide(a, b)"]:::method --> RD["CGRect.intersects\nAABB overlap test"]:::desc
+    C["circleHitsRect(center, radius, rect)"]:::method --> CD["Nearest-point clamping\ndx² + dy² ≤ r²"]:::desc
+    D["distance(a, b)"]:::method --> DD["√(dx² + dy²)\nEuclidean distance"]:::desc
+    P["pointInRect(point, rect)"]:::method --> PD["CGRect.contains\nPoint containment"]:::desc
+```
+
+### Sprite Extraction
+
+Pixel-art sprite data was extracted from inline arrays in game files into 10 dedicated `enum` types under `daemon/Games/Sprites/`. Each enum holds `static let` properties of type `CGImage?`, baked at module load time via `GameBase.renderPixelArt()`. This eliminates per-frame allocation and keeps game logic files focused on mechanics rather than large data arrays.
+
+| Sprite File | Contents |
+|-------------|----------|
+| `AsteroidsSprites` | Ship silhouette, asteroid polygon data |
+| `BounceSprites` | Paddle shimmer gradient (28×3 at 3× scale) |
+| `BreakoutSprites` | Brick textures per row color, paddle sprite |
+| `DoodleJumpSprites` | Static platform (24×5 green), moving platform (brown/yellow stripe) |
+| `FlappySprites` | Pipe body (18×8 brick pattern), pipe cap (22×8 flared end) |
+| `FroggerSprites` | Motorcycle (10×8), car, truck with headlights/wheels |
+| `InvadersSprites` | Squid, crab, skull (11×8 each), UFO, explosion |
+| `PacManSprites` | Blinky, Pinky, Inky, Clyde (14×14 each with eye detail) |
+| `RunnerSprites` | Obstacle tile textures for 6 zone color themes |
+| `SnakeSprites` | Head, body chain, tail tip, apple food item |
+
+---
+
 ## Source file map
 
 ```
 pipbounce/
 ├── install.sh                       4-step build + install + launchd setup
 ├── README.md
+├── CLAUDE.md                        AI assistant instructions
+├── docs/
+│   ├── ARCHITECTURE.md              System architecture deep dive
+│   ├── GAME-ENGINE.md               Game engine + all 14 game modes
+│   ├── DODGE-SYSTEM.md              Dodge behavior + PiP detection
+│   ├── RGB-BORDER.md                Glow border + sacred geometry
+│   └── API-REFERENCE.md            HTTP API + Chrome extension + config
 ├── extension/                       Chrome MV3 Extension
 │   ├── manifest.json                permissions: scripting, activeTab, tabs
 │   ├── popup.html                   320px dark zinc UI
@@ -351,8 +456,8 @@ pipbounce/
 │   ├── icons.js                     SVG icon definitions for game cards
 │   └── icons/                       Generated 16/48/128px PNGs
 └── daemon/                          Swift source (compiled by swiftc)
-    ├── main.swift                   Entry: PID lock, signals, NSApplication, RunLoop
-    ├── DodgeDaemon.swift            1/60s tick, CGEvent mouse, dodge animation
+    ├── main.swift                   Entry: PID lock, signals, SoundKit preload, NSApp.run()
+    ├── DodgeDaemon.swift            16ms tick, CGEvent mouse, dodge animation
     ├── ControlServer.swift          BSD socket HTTP :51789, route dispatch
     ├── PipDiscovery.swift           AXUIElement + CGWindowList PiP detection
     ├── ScreenGeometry.swift         Screen frame conversion + farthest corner math
@@ -360,18 +465,37 @@ pipbounce/
     ├── Hotkey.swift                 CGEvent tap for global hotkey
     ├── RGBBorder.swift              Conic gradient border + burst geometry
     ├── MiniGame.swift               Protocol: active, lastBounds, start(), stop()
+    ├── SoundKit.swift               SFX enum + NSSound mapping + preload singleton
     └── Games/
-        ├── GameBase.swift           Abstract base: Mach timing, timer, score overlay, PiP restore
-        ├── PongGame.swift
-        ├── FlappyGame.swift
-        ├── SnakeGame.swift
-        ├── BounceGame.swift
-        ├── BreakoutGame.swift
-        ├── InvadersGame.swift
-        ├── FroggerGame.swift
-        ├── RunnerGame.swift
-        ├── AsteroidsGame.swift
-        ├── CursorHuntGame.swift
-        ├── DoodleJumpGame.swift
-        └── PacManGame.swift
+        ├── GameBase.swift           Abstract base: GameState enum, Mach timing, timer,
+        │                              collision helpers, score overlay, PiP restore,
+        │                              LayerPool integration, pixel art renderer
+        ├── LayerPool.swift          CALayer recycler: dequeue/enqueue/drain
+        ├── PiPongGame.swift         PiPong classic: PiP=ball, AI opponent, trail, shake
+        ├── PongGame.swift           PiPong 2: PiP=paddle, separate ball window
+        ├── FlappyGame.swift         Gravity + flap, pipe NSWindows, PiP resize, tilt
+        ├── SnakeGame.swift          Cursor-following, 3× world + camera, tail segments
+        ├── BounceGame.swift         Physics toy + AI paddle mode, burst milestones
+        ├── BouncePerks.swift        Perk system for bounce paddle mode
+        ├── BouncePerks+Sprites.swift  Perk pixel-art sprites
+        ├── BouncePerkUI.swift       Perk UI overlay
+        ├── BreakoutGame.swift       10×5 bricks, lives, levels, CAEmitterLayer
+        ├── InvadersGame.swift       Pixel-art sprites, UFO, waves, rapid fire
+        ├── FroggerGame.swift        8 lanes, 3 vehicle types, hop forward/back
+        ├── RunnerGame.swift         Gap dodger, zone system, death particles
+        ├── AsteroidsGame.swift      3× world, thrust/drift, asteroid splits, emitters
+        ├── CursorHuntGame.swift     PiP chases cursor, ramping acceleration
+        ├── DoodleJumpGame.swift     Platform bouncing, camera scroll
+        ├── PacManGame.swift         21×21 maze, 4 ghosts, power pellets, tunnel
+        └── Sprites/                 Extracted pixel-art sprite constants (10 files)
+            ├── AsteroidsSprites.swift
+            ├── BounceSprites.swift
+            ├── BreakoutSprites.swift
+            ├── DoodleJumpSprites.swift
+            ├── FlappySprites.swift
+            ├── FroggerSprites.swift
+            ├── InvadersSprites.swift
+            ├── PacManSprites.swift
+            ├── RunnerSprites.swift
+            └── SnakeSprites.swift
 ```

@@ -31,14 +31,23 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
 settings.load()
+SoundKit.shared.preload()
 let server = ControlServer()
 server.start()
 let daemon = PipBounceDaemon()
+let menuBar = MenuBarController()
 
-signal(SIGINT) { _ in cleanup(); exit(0) }
-signal(SIGTERM) { _ in cleanup(); exit(0) }
+signal(SIGINT, SIG_IGN)
+signal(SIGTERM, SIG_IGN)
+let sigintSrc = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+sigintSrc.setEventHandler { cleanup(); exit(0) }
+sigintSrc.resume()
+let sigtermSrc = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+sigtermSrc.setEventHandler { cleanup(); exit(0) }
+sigtermSrc.resume()
 
 DispatchQueue.main.async {
+    menuBar.setup()
     daemon.start()
 }
 

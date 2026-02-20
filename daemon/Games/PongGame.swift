@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-let pipong2 = PiPong2Game()
+
 
 class PiPong2Game: GameBase {
 
@@ -147,12 +147,11 @@ class PiPong2Game: GameBase {
         // Match over pause
         if matchOverUntil > 0 {
             if now < matchOverUntil {
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                updateOverlayPositions(screen: screen)
-                let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
-                syncBorder(around: pipBounds)
-                CATransaction.commit()
+                withTransaction {
+                    updateOverlayPositions(screen: screen)
+                    let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
+                    syncBorder(around: pipBounds)
+                }
                 return
             }
             matchOverUntil = 0
@@ -164,13 +163,12 @@ class PiPong2Game: GameBase {
 
         // Pause after score
         if pauseUntil > 0 {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            updateOverlayPositions(screen: screen)
-            let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
-            syncBorder(around: pipBounds)
-            if scoreChanged { updateScore(); scoreChanged = false }
-            CATransaction.commit()
+            withTransaction {
+                updateOverlayPositions(screen: screen)
+                let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
+                syncBorder(around: pipBounds)
+                if scoreChanged { updateScore(); scoreChanged = false }
+            }
             if now < pauseUntil { return }
             pauseUntil = 0
             rallyStartMach = now
@@ -289,16 +287,14 @@ class PiPong2Game: GameBase {
         // Border around PiP (player paddle)
         let pipBounds = CGRect(x: pipX, y: pipPaddleY, width: cachedPipSize.width, height: cachedPipSize.height)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
+        withTransaction {
+            let shakeOff = applyShake()
 
-        let shakeOff = applyShake()
-
-        updateOverlayPositions(screen: screen, shakeOffset: shakeOff)
-        syncBorder(around: pipBounds)
-        updateTrail(shakeOffset: shakeOff, screen: screen)
-        if scoreChanged { updateScore(); scoreChanged = false }
-        CATransaction.commit()
+            updateOverlayPositions(screen: screen, shakeOffset: shakeOff)
+            syncBorder(around: pipBounds)
+            updateTrail(shakeOffset: shakeOff, screen: screen)
+            if scoreChanged { updateScore(); scoreChanged = false }
+        }
     }
 
     // MARK: - AI Difficulty
@@ -450,41 +446,9 @@ class PiPong2Game: GameBase {
         bw.orderFrontRegardless()
         ballWindow = bw
 
-        // Score overlay — wide liquid glass pill
-        let scoreW: CGFloat = 420
-        let scoreSz: CGFloat = 60
-        let scoreY = h - screen.minY - 75
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - scoreW / 2, y: scoreY, width: scoreW, height: scoreSz),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        sw.isOpaque = false
-        sw.backgroundColor = .clear
-        sw.level = .floating
-        sw.ignoresMouseEvents = true
-        sw.hasShadow = true
-        sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-
-        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: scoreW, height: scoreSz))
-        vibrancy.material = .hudWindow
-        vibrancy.blendingMode = .behindWindow
-        vibrancy.state = .active
-        vibrancy.wantsLayer = true
-        vibrancy.layer?.cornerRadius = scoreSz / 2   // full pill
-        vibrancy.layer?.borderWidth = 0.5
-        vibrancy.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
-        vibrancy.layer?.masksToBounds = true
-        sw.contentView = vibrancy
-
-        let label = NSTextField(frame: NSRect(x: 30, y: 0, width: scoreW - 60, height: scoreSz))
-        label.isEditable = false
-        label.isBordered = false
-        label.backgroundColor = .clear
-        label.alignment = .center
-        label.attributedStringValue = scoreString("0", "0")
-        vibrancy.addSubview(label)
-        sw.orderFrontRegardless()
-
-        scoreOverlay = sw
-        scoreLabel = label
+        // Score overlay — shared liquid glass pill
+        createScoreOverlay(screen: screen, width: 160)
+        scoreLabel?.attributedStringValue = Self.styledVersusScore("0", "0")
 
         // Dashed center line (decorative)
         let centerLineWindow = NSWindow(
@@ -615,71 +579,12 @@ class PiPong2Game: GameBase {
 
     // MARK: - Score Display
 
-    private func scoreString(_ left: String, _ right: String) -> NSAttributedString {
-        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
-        let dimMint = mint.withAlphaComponent(0.5)
-        let font = NSFont.monospacedSystemFont(ofSize: 36, weight: .heavy)
-        let colonFont = NSFont.monospacedSystemFont(ofSize: 28, weight: .medium)
-        let shadow = NSShadow()
-        shadow.shadowColor = mint.withAlphaComponent(0.7)
-        shadow.shadowBlurRadius = 12
-        shadow.shadowOffset = .zero
-        let style = NSMutableParagraphStyle()
-        style.alignment = .center
-
-        let result = NSMutableAttributedString()
-
-        // Left score
-        result.append(NSAttributedString(string: left, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 4.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-
-        // Wide colon separator
-        result.append(NSAttributedString(string: "    :    ", attributes: [
-            .font: colonFont, .foregroundColor: dimMint, .kern: 2.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-
-        // Right score
-        result.append(NSAttributedString(string: right, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 4.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ]))
-
-        return result
-    }
-
-    private func scoreStringMessage(_ text: String) -> NSAttributedString {
-        let mint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
-        let font = NSFont.monospacedSystemFont(ofSize: 28, weight: .heavy)
-        let shadow = NSShadow()
-        shadow.shadowColor = mint.withAlphaComponent(0.7)
-        shadow.shadowBlurRadius = 12
-        shadow.shadowOffset = .zero
-        let style = NSMutableParagraphStyle()
-        style.alignment = .center
-        return NSAttributedString(string: text, attributes: [
-            .font: font, .foregroundColor: mint, .kern: 8.0,
-            .shadow: shadow, .paragraphStyle: style,
-        ])
-    }
-
     private func updateScore() {
         if let msg = matchOverMessage {
-            scoreLabel?.attributedStringValue = scoreStringMessage(msg)
+            scoreLabel?.attributedStringValue = Self.styledMessage(msg)
         } else {
-            scoreLabel?.attributedStringValue = scoreString("\(playerScore)", "\(aiScore)")
+            scoreLabel?.attributedStringValue = Self.styledVersusScore("\(playerScore)", "\(aiScore)")
         }
-
-        // Pulse animation on score change
-        if let layer = scoreOverlay?.contentView?.layer {
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.08
-            pulse.toValue = 1.0
-            pulse.duration = 0.2
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(pulse, forKey: "scorePulse")
-        }
+        pulseScoreOverlay()
     }
 }

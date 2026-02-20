@@ -1,7 +1,7 @@
 import Cocoa
 import ApplicationServices
 
-let asteroids = AsteroidsGame()
+
 
 class AsteroidsGame: GameBase {
 
@@ -95,195 +95,16 @@ class AsteroidsGame: GameBase {
     // Input
     private var wasMouseDown = false
 
-    // MARK: - Pixel Art Sprites
+    // MARK: - Pixel Art Sprites (see AsteroidsSprites.swift)
 
     private enum Sprites {
-        // Large asteroid 16x16, 3 variants (scale 3 -> 48x48 display)
-        static let largA: CGImage? = {
-            let O: UInt32 = 0 // transparent
-            let pixels: [[UInt32]] = [
-                [O,     O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x556655, 0x4A5A4A, 0x4A5A4A, 0x556655, 0x3A4A3A, O,     O,     O,     O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O],
-                [O,     0x4A5A4A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x3A3A3A, 0x2E2E2E, 0x5A6A5A, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x4A5A4A, O],
-                [0x3A4A3A, 0x5A6A5A, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x2E2E2E, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x5A6A5A, 0x3A4A3A],
-                [0x4A5A4A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, 0x2E2E2E, 0x3A3A3A, 0x5A6A5A, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x7A8A7A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x3A3A3A, 0x2E2E2E, 0x7A8A7A, 0x8A9A8A, 0x788878, 0x556655],
-                [0x556655, 0x788878, 0x8A9A8A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x222222, 0x2E2E2E, 0x6B7B6B, 0x8A9A8A, 0x6B7B6B, 0x556655],
-                [0x556655, 0x6B7B6B, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, 0x2E2E2E, 0x5A6A5A, 0x788878, 0x7A8A7A, 0x6B7B6B, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x7A8A7A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x788878, 0x4A5A4A],
-                [0x4A5A4A, 0x6B7B6B, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x3A3A3A, 0x222222, 0x3A3A3A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x788878, 0x5A6A5A, 0x3A4A3A],
-                [O,     0x4A5A4A, 0x5A6A5A, 0x2E2E2E, 0x222222, 0x2E2E2E, 0x5A6A5A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x788878, 0x6B7B6B, 0x4A5A4A, O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x4A5A4A, 0x3A3A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x4A5A4A, 0x4A5A4A, 0x3A4A3A, 0x4A5A4A, 0x3A4A3A, O,     O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let largB: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x556655, 0x4A5A4A, 0x3A4A3A, 0x4A5A4A, 0x556655, 0x4A5A4A, 0x3A4A3A, O,     O,     O],
-                [O,     O,     0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O,     O],
-                [O,     0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A, 0x3A4A3A, O],
-                [0x3A4A3A, 0x5A6A5A, 0x788878, 0x9AAA9A, 0x7A8A7A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x3A3A3A, 0x788878, 0x6B7B6B, 0x4A5A4A, O],
-                [0x4A5A4A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x222222, 0x1A1A1A, 0x222222, 0x6B7B6B, 0x788878, 0x5A6A5A, 0x3A4A3A],
-                [0x556655, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x788878, 0x3A3A3A, 0x222222, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A],
-                [0x556655, 0x8A9A8A, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x788878, 0x556655],
-                [0x4A5A4A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x3A3A3A, 0x222222, 0x3A3A3A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x8A9A8A, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A],
-                [0x556655, 0x6B7B6B, 0x9AAA9A, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x1A1A1A, 0x222222, 0x6B7B6B, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x788878, 0x5A6A5A, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x7A8A7A, 0x6B7B6B, 0x2E2E2E, 0x3A3A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, 0x3A4A3A],
-                [0x3A4A3A, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x6B7B6B, 0x4A5A4A, O],
-                [O,     0x4A5A4A, 0x6B7B6B, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O,     O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O,     O,     O,     O],
-                [O,     O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x3A4A3A, 0x3A4A3A, 0x3A4A3A, O,     O,     O,     O,     O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let largC: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     O,     O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x556655, 0x4A5A4A, 0x3A4A3A, O,     O,     O,     O,     O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O],
-                [O,     0x4A5A4A, 0x788878, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x2E2E2E, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x4A5A4A, O],
-                [0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x6B7B6B, 0x222222, 0x1A1A1A, 0x222222, 0x5A6A5A, 0x7A8A7A, 0x8A9A8A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x5A6A5A, 0x3A4A3A],
-                [0x4A5A4A, 0x788878, 0x9AAA9A, 0x788878, 0x2E2E2E, 0x222222, 0x3A3A3A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A],
-                [0x556655, 0x8A9A8A, 0x8A9A8A, 0x9AAA9A, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x7A8A7A, 0x9AAA9A, 0x788878, 0x556655],
-                [0x556655, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x5A6A5A, 0x3A3A3A, 0x222222, 0x2E2E2E, 0x5A6A5A, 0x8A9A8A, 0x6B7B6B, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x3A3A3A, 0x222222, 0x1A1A1A, 0x222222, 0x3A3A3A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A],
-                [0x4A5A4A, 0x6B7B6B, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x2E2E2E, 0x3A3A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [0x3A4A3A, 0x5A6A5A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x788878, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x5A6A5A, 0x3A4A3A],
-                [O,     0x4A5A4A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x6B7B6B, 0x4A5A4A, O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O],
-                [O,     O,     0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x5A6A5A, 0x4A5A4A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O,     O],
-                [O,     O,     O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, 0x4A5A4A, 0x3A4A3A, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O,     O],
-                [O,     O,     O,     O,     O,     0x3A4A3A, 0x3A4A3A, O,     O,     0x3A4A3A, 0x3A4A3A, O,     O,     O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let largeVariants: [CGImage] = [largA, largB, largC].compactMap { $0 }
-
-        // Medium asteroid 10x10, 3 variants (scale 3 -> 30x30 display)
-        static let medA: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x556655, 0x4A5A4A, 0x556655, 0x3A4A3A, O,     O],
-                [0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x6B7B6B, 0x4A5A4A, O],
-                [0x4A5A4A, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [0x556655, 0x7A8A7A, 0x222222, 0x2E2E2E, 0x5A6A5A, 0x7A8A7A, 0x8A9A8A, 0x7A8A7A, 0x788878, 0x4A5A4A],
-                [0x4A5A4A, 0x8A9A8A, 0x6B7B6B, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x3A3A3A, 0x6B7B6B, 0x556655],
-                [0x556655, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x7A8A7A, 0x3A3A3A, 0x222222, 0x5A6A5A, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x788878, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x3A4A3A],
-                [0x3A4A3A, 0x6B7B6B, 0x7A8A7A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, O],
-                [O,     0x4A5A4A, 0x5A6A5A, 0x788878, 0x6B7B6B, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x4A5A4A, 0x3A4A3A, 0x3A4A3A, O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let medB: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x556655, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     0x4A5A4A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x3A4A3A, O],
-                [0x3A4A3A, 0x6B7B6B, 0x9AAA9A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x8A9A8A, 0x788878, 0x5A6A5A, 0x3A4A3A],
-                [0x4A5A4A, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x8A9A8A, 0x3A3A3A, 0x222222, 0x3A3A3A, 0x6B7B6B, 0x4A5A4A],
-                [0x556655, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x6B7B6B, 0x222222, 0x1A1A1A, 0x2E2E2E, 0x788878, 0x556655],
-                [0x4A5A4A, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x788878, 0x3A3A3A, 0x5A6A5A, 0x7A8A7A, 0x6B7B6B, 0x4A5A4A],
-                [0x4A5A4A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x5A6A5A, 0x3A4A3A],
-                [0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x6B7B6B, 0x4A5A4A, O],
-                [O,     0x3A4A3A, 0x4A5A4A, 0x5A6A5A, 0x6B7B6B, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     O,     O,     0x3A4A3A, 0x3A4A3A, 0x3A4A3A, O,     O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let medC: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x4A5A4A, 0x556655, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [0x3A4A3A, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x8A9A8A, 0x788878, 0x5A6A5A, 0x3A4A3A, O],
-                [0x4A5A4A, 0x788878, 0x9AAA9A, 0x7A8A7A, 0x8A9A8A, 0x9AAA9A, 0x3A3A3A, 0x222222, 0x5A6A5A, 0x3A4A3A],
-                [0x556655, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x7A8A7A, 0x222222, 0x1A1A1A, 0x3A3A3A, 0x4A5A4A],
-                [0x556655, 0x9AAA9A, 0x8A9A8A, 0x9AAA9A, 0x788878, 0x6B7B6B, 0x2E2E2E, 0x3A3A3A, 0x6B7B6B, 0x4A5A4A],
-                [0x4A5A4A, 0x7A8A7A, 0x3A3A3A, 0x222222, 0x5A6A5A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x788878, 0x4A5A4A],
-                [0x3A4A3A, 0x6B7B6B, 0x2E2E2E, 0x3A3A3A, 0x788878, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A],
-                [0x3A4A3A, 0x5A6A5A, 0x788878, 0x8A9A8A, 0x9AAA9A, 0x7A8A7A, 0x6B7B6B, 0x5A6A5A, 0x3A4A3A, O],
-                [O,     0x3A4A3A, 0x5A6A5A, 0x6B7B6B, 0x788878, 0x5A6A5A, 0x4A5A4A, 0x3A4A3A, O,     O],
-                [O,     O,     0x3A4A3A, 0x4A5A4A, 0x3A4A3A, 0x3A4A3A, O,     O,     O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
-
-        static let mediumVariants: [CGImage] = [medA, medB, medC].compactMap { $0 }
-
-        // Small asteroid 6x6, 3 variants (scale 2 -> 12x12 display)
-        static let smlA: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     0x3A4A3A, 0x556655, 0x4A5A4A, 0x3A4A3A, O],
-                [0x3A4A3A, 0x788878, 0x8A9A8A, 0x7A8A7A, 0x6B7B6B, 0x3A4A3A],
-                [0x4A5A4A, 0x9AAA9A, 0x3A3A3A, 0x222222, 0x788878, 0x4A5A4A],
-                [0x556655, 0x8A9A8A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x4A5A4A],
-                [0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x7A8A7A, 0x5A6A5A, 0x3A4A3A],
-                [O,     0x3A4A3A, 0x4A5A4A, 0x3A4A3A, 0x3A4A3A, O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 2)
-        }()
-
-        static let smlB: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     0x3A4A3A, 0x4A5A4A, 0x556655, 0x3A4A3A, O],
-                [0x3A4A3A, 0x6B7B6B, 0x8A9A8A, 0x9AAA9A, 0x788878, 0x3A4A3A],
-                [0x4A5A4A, 0x8A9A8A, 0x7A8A7A, 0x3A3A3A, 0x222222, 0x4A5A4A],
-                [0x4A5A4A, 0x9AAA9A, 0x8A9A8A, 0x6B7B6B, 0x788878, 0x4A5A4A],
-                [0x3A4A3A, 0x788878, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [O,     0x3A4A3A, 0x3A4A3A, 0x4A5A4A, 0x3A4A3A, O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 2)
-        }()
-
-        static let smlC: CGImage? = {
-            let O: UInt32 = 0
-            let pixels: [[UInt32]] = [
-                [O,     0x4A5A4A, 0x556655, 0x4A5A4A, 0x3A4A3A, O],
-                [0x3A4A3A, 0x8A9A8A, 0x7A8A7A, 0x8A9A8A, 0x6B7B6B, 0x3A4A3A],
-                [0x4A5A4A, 0x7A8A7A, 0x9AAA9A, 0x3A3A3A, 0x222222, 0x3A4A3A],
-                [0x4A5A4A, 0x8A9A8A, 0x6B7B6B, 0x5A6A5A, 0x788878, 0x4A5A4A],
-                [0x3A4A3A, 0x6B7B6B, 0x9AAA9A, 0x8A9A8A, 0x5A6A5A, 0x3A4A3A],
-                [O,     0x3A4A3A, 0x4A5A4A, 0x3A4A3A, O,     O],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 2)
-        }()
-
-        static let smallVariants: [CGImage] = [smlA, smlB, smlC].compactMap { $0 }
-
-        // Bullet 2x6 (scale 3 -> 6x18 display)
-        static let bullet: CGImage? = {
-            let pixels: [[UInt32]] = [
-                [0x88FFAA, 0x88FFAA],
-                [0x00FF55, 0x00FF55],
-                [0x00DD44, 0x00DD44],
-                [0x00CC33, 0x00CC33],
-                [0x00AA22, 0x00AA22],
-                [0x66DD88, 0x66DD88],
-            ]
-            return GameBase.renderPixelArt(pixels, scale: 3)
-        }()
+        static var bullet: CGImage? { AsteroidsSprites.bullet }
 
         static func variants(for size: AsteroidSize) -> [CGImage] {
             switch size {
-            case .large:  return largeVariants
-            case .medium: return mediumVariants
-            case .small:  return smallVariants
+            case .large:  return AsteroidsSprites.largeVariants
+            case .medium: return AsteroidsSprites.mediumVariants
+            case .small:  return AsteroidsSprites.smallVariants
             }
         }
 
@@ -481,8 +302,8 @@ class AsteroidsGame: GameBase {
         ow.orderFrontRegardless()
         overlayWindow = ow
 
-        createScoreOverlay(screen: screen, width: 200)
-        scoreLabel?.stringValue = livesString()
+        createScoreOverlay(screen: screen, width: 180)
+        scoreLabel?.attributedStringValue = Self.styledScore(livesString())
     }
 
     private func livesString() -> String {
@@ -517,10 +338,9 @@ class AsteroidsGame: GameBase {
         } else {
             ax = CGFloat.random(in: 0...worldW)
             ay = CGFloat.random(in: 0...worldH)
+            let shipCenter = CGPoint(x: shipPos.x + cachedPipSize.width / 2, y: shipPos.y + cachedPipSize.height / 2)
             for _ in 0..<20 {
-                let dx = ax - (shipPos.x + cachedPipSize.width / 2)
-                let dy = ay - (shipPos.y + cachedPipSize.height / 2)
-                if sqrt(dx * dx + dy * dy) > 300 {
+                if Self.distance(CGPoint(x: ax, y: ay), shipCenter) > 300 {
                     break
                 }
                 ax = CGFloat.random(in: 0...worldW)
@@ -538,7 +358,7 @@ class AsteroidsGame: GameBase {
 
         let rotSpeed = CGFloat.random(in: -2...2)
 
-        let layer = CALayer()
+        let layer = layerPool.dequeue()
         layer.bounds = CGRect(origin: .zero, size: displaySize)
         let variants = Sprites.variants(for: size)
         if !variants.isEmpty {
@@ -692,6 +512,7 @@ class AsteroidsGame: GameBase {
         bullets.removeAll { b in
             let age = machToSeconds(now - b.spawnMach)
             if age > CGFloat(bulletLifetime) {
+                layerPool.enqueue(b.layer)
                 b.layer.removeFromSuperlayer()
                 return true
             }
@@ -709,9 +530,9 @@ class AsteroidsGame: GameBase {
                 let d = a.size.radius * 2
                 let aRect = CGRect(x: a.x, y: a.y, width: d, height: d)
 
-                if bRect.intersects(aRect) {
+                if Self.rectsCollide(bRect, aRect) {
                     score += a.size.points
-                    scoreLabel?.stringValue = livesString()
+                    scoreLabel?.attributedStringValue = Self.styledScore(livesString())
 
                     let expColor = NSColor(red: 0.0, green: 0.85, blue: 0.4, alpha: 1)
                     let expWorld = worldToScreen(a.x + a.size.radius, a.y + a.size.radius)
@@ -720,9 +541,11 @@ class AsteroidsGame: GameBase {
                     let splitAsteroids = splitAsteroid(a)
                     newAsteroids.append(contentsOf: splitAsteroids)
 
+                    layerPool.enqueue(a.layer)
                     a.layer.removeFromSuperlayer()
                     asteroidList.remove(at: ai)
 
+                    layerPool.enqueue(bullets[bi].layer)
                     bullets[bi].layer.removeFromSuperlayer()
                     bullets.remove(at: bi)
 
@@ -741,7 +564,7 @@ class AsteroidsGame: GameBase {
             for a in asteroidList {
                 let d = a.size.radius * 2
                 let aRect = CGRect(x: a.x + 4, y: a.y + 4, width: d - 8, height: d - 8)
-                if shipRect.intersects(aRect) {
+                if Self.rectsCollide(shipRect, aRect) {
                     lives -= 1
                     if lives <= 0 {
                         triggerGameOver(message: "GAME OVER \(score)")
@@ -750,13 +573,13 @@ class AsteroidsGame: GameBase {
                         let cx = shipPos.x + size.width / 2
                         let cy = shipPos.y + size.height / 2
                         asteroidList.removeAll { ast in
-                            let adx = (ast.x + ast.size.radius) - cx
-                            let ady = (ast.y + ast.size.radius) - cy
-                            let close = sqrt(adx * adx + ady * ady) < 150
+                            let astCenter = CGPoint(x: ast.x + ast.size.radius, y: ast.y + ast.size.radius)
+                            let close = Self.distance(astCenter, CGPoint(x: cx, y: cy)) < 150
                             if close {
                                 let ec = NSColor(red: 1.0, green: 0.4, blue: 0.1, alpha: 1)
                                 let ew = self.worldToScreen(ast.x + ast.size.radius, ast.y + ast.size.radius)
                                 self.emitExplosion(at: CGPoint(x: ew.x - screen.minX, y: self.screenH - ew.y), color: ec)
+                                self.layerPool.enqueue(ast.layer)
                                 ast.layer.removeFromSuperlayer()
                             }
                             return close
@@ -766,7 +589,7 @@ class AsteroidsGame: GameBase {
                         shipVel = .zero
                         invulnerable = true
                         invulnerableEndMach = now + secondsToMach(Double(invulnerableDuration))
-                        scoreLabel?.stringValue = livesString()
+                        scoreLabel?.attributedStringValue = Self.styledScore(livesString())
                         print("Asteroids lost life, \(lives) remaining")
                     }
                     break
@@ -778,7 +601,7 @@ class AsteroidsGame: GameBase {
         if !gameOver && asteroidList.isEmpty {
             waveCleared = true
             waveClearMach = now
-            scoreLabel?.stringValue = "WAVE \(wave)! \(score)"
+            scoreLabel?.attributedStringValue = Self.styledScore("WAVE \(wave)! \(score)")
             print("Asteroids wave \(wave) cleared: score=\(score)")
         }
 
@@ -789,11 +612,19 @@ class AsteroidsGame: GameBase {
 
     // MARK: - Camera
 
+    /// Shortest signed delta on a wrapping axis (result in -max/2...max/2)
+    private func wrapDelta(_ a: CGFloat, _ b: CGFloat, _ wMax: CGFloat) -> CGFloat {
+        var d = a - b
+        if d > wMax / 2 { d -= wMax }
+        if d < -wMax / 2 { d += wMax }
+        return d
+    }
+
     private func updateCamera(screen: CGRect, size: CGSize) {
         let targetX = shipPos.x + size.width / 2 - screen.width / 2
         let targetY = shipPos.y + size.height / 2 - screen.height / 2
-        cameraX += (targetX - cameraX) * cameraLerp
-        cameraY += (targetY - cameraY) * cameraLerp
+        cameraX += wrapDelta(targetX, cameraX, worldW) * cameraLerp
+        cameraY += wrapDelta(targetY, cameraY, worldH) * cameraLerp
     }
 
     // MARK: - Helpers
@@ -811,86 +642,82 @@ class AsteroidsGame: GameBase {
 
         let bounds = CGRect(origin: shipScreen, size: size)
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
-        // Thrust emitter
-        if let te = thrustEmitter {
-            let shipCX = shipPos.x + size.width / 2
-            let shipCY = shipPos.y + size.height / 2
-            if let mp = mousePosition() {
-                let mouseWorld = screenToWorld(mp.x, mp.y)
-                let dx = mouseWorld.x - shipCX
-                let dy = mouseWorld.y - shipCY
-                let dist = sqrt(dx * dx + dy * dy)
-                if dist > 5 {
-                    let nx = dx / dist
-                    let ny = dy / dist
-                    let twx = shipCX - nx * (size.width / 2 + 10)
-                    let twy = shipCY - ny * (size.height / 2 + 10)
-                    let ts = worldToScreen(twx, twy)
-                    te.emitterPosition = CGPoint(x: ts.x - screen.minX, y: screenH - ts.y)
-                    // Emission direction: away from mouse (opposite of thrust)
-                    let emitAngle = atan2(-(screenH - ts.y - (screenH - shipScreen.y - size.height / 2)),
-                                          -(ts.x - screen.minX - (shipScreen.x - screen.minX + size.width / 2)))
-                    for cell in te.emitterCells ?? [] {
-                        cell.emissionLongitude = emitAngle
+        withTransaction {
+            // Thrust emitter
+            if let te = thrustEmitter {
+                let shipCX = shipPos.x + size.width / 2
+                let shipCY = shipPos.y + size.height / 2
+                if let mp = mousePosition() {
+                    let mouseWorld = screenToWorld(mp.x, mp.y)
+                    let dx = mouseWorld.x - shipCX
+                    let dy = mouseWorld.y - shipCY
+                    let dist = sqrt(dx * dx + dy * dy)
+                    if dist > 5 {
+                        let nx = dx / dist
+                        let ny = dy / dist
+                        let twx = shipCX - nx * (size.width / 2 + 10)
+                        let twy = shipCY - ny * (size.height / 2 + 10)
+                        let ts = worldToScreen(twx, twy)
+                        te.emitterPosition = CGPoint(x: ts.x - screen.minX, y: screenH - ts.y)
+                        let emitAngle = atan2(-(screenH - ts.y - (screenH - shipScreen.y - size.height / 2)),
+                                              -(ts.x - screen.minX - (shipScreen.x - screen.minX + size.width / 2)))
+                        for cell in te.emitterCells ?? [] {
+                            cell.emissionLongitude = emitAngle
+                        }
+                        te.birthRate = 1
+                    } else {
+                        te.birthRate = 0
                     }
-                    te.birthRate = 1
-                } else {
-                    te.birthRate = 0
                 }
             }
-        }
 
-        // Asteroids
-        for a in asteroidList {
-            let ds = Sprites.displaySize(for: a.size)
-            if isVisible(a.x, a.y, ds.width, ds.height) {
-                let sp = worldToScreen(a.x, a.y)
-                a.layer.frame = CGRect(x: sp.x - screen.minX, y: screenH - sp.y - ds.height, width: ds.width, height: ds.height)
-                a.layer.transform = CATransform3DMakeRotation(a.rotation, 0, 0, 1)
-                a.layer.isHidden = false
-            } else {
-                a.layer.isHidden = true
+            // Asteroids
+            for a in asteroidList {
+                let ds = Sprites.displaySize(for: a.size)
+                if isVisible(a.x, a.y, ds.width, ds.height) {
+                    let sp = worldToScreen(a.x, a.y)
+                    a.layer.frame = CGRect(x: sp.x - screen.minX, y: screenH - sp.y - ds.height, width: ds.width, height: ds.height)
+                    a.layer.transform = CATransform3DMakeRotation(a.rotation, 0, 0, 1)
+                    a.layer.isHidden = false
+                } else {
+                    a.layer.isHidden = true
+                }
             }
-        }
 
-        // Bullets
-        for b in bullets {
-            if isVisible(b.x, b.y, 4, 10) {
-                let sp = worldToScreen(b.x, b.y)
-                b.layer.position = CGPoint(x: sp.x - screen.minX + 2, y: screenH - sp.y - 5)
-                b.layer.isHidden = false
-            } else {
-                b.layer.isHidden = true
+            // Bullets
+            for b in bullets {
+                if isVisible(b.x, b.y, 4, 10) {
+                    let sp = worldToScreen(b.x, b.y)
+                    b.layer.position = CGPoint(x: sp.x - screen.minX + 2, y: screenH - sp.y - 5)
+                    b.layer.isHidden = false
+                } else {
+                    b.layer.isHidden = true
+                }
             }
-        }
 
-        // Border
-        if settings.glow, let border = borderRef {
-            if invulnerable {
-                let ticks = secondsToMach(Double(invulnerableDuration))
-                let elapsed = machToSeconds(now - (invulnerableEndMach - ticks))
-                let blinkOn = Int(elapsed * blinkFrequency) % 2 == 0
-                if blinkOn {
+            // Border
+            if settings.glow, let border = borderRef {
+                if invulnerable {
+                    let ticks = secondsToMach(Double(invulnerableDuration))
+                    let elapsed = machToSeconds(now - (invulnerableEndMach - ticks))
+                    let blinkOn = Int(elapsed * blinkFrequency) % 2 == 0
+                    if blinkOn {
+                        border.show(around: bounds)
+                    } else {
+                        border.hide()
+                    }
+                } else {
                     border.show(around: bounds)
-                } else {
-                    border.hide()
                 }
-            } else {
-                border.show(around: bounds)
             }
+            lastBounds = bounds
         }
-        lastBounds = bounds
-
-        CATransaction.commit()
     }
 
     private func spawnBullet(x: CGFloat, y: CGFloat, vx: CGFloat, vy: CGFloat, spawnTime: UInt64) {
         guard let rootLayer = overlayLayer else { return }
 
-        let layer = CALayer()
+        let layer = layerPool.dequeue()
         layer.bounds = CGRect(x: 0, y: 0, width: 6, height: 18)
         layer.contents = Sprites.bullet
         layer.magnificationFilter = .nearest
@@ -930,7 +757,7 @@ class AsteroidsGame: GameBase {
             let nvx = baseVx * cos_a - baseVy * sin_a
             let nvy = baseVx * sin_a + baseVy * cos_a
 
-            let layer = CALayer()
+            let layer = layerPool.dequeue()
             layer.bounds = CGRect(origin: .zero, size: displaySize)
             if !variants.isEmpty {
                 layer.contents = variants.randomElement()!

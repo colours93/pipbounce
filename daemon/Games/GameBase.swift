@@ -1,6 +1,15 @@
 import Cocoa
 import ApplicationServices
 
+/// Wrap a block in CATransaction with animations disabled.
+/// Free function — no instance dependency, usable anywhere.
+func withTransaction(_ body: () -> Void) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    body()
+    CATransaction.commit()
+}
+
 /// Shared base class for all PiP mini-games. Handles:
 /// - Mach time conversion
 /// - Game timer setup/teardown
@@ -10,6 +19,8 @@ import ApplicationServices
 /// - Border sync boilerplate
 ///
 /// Subclasses implement `onStart()`, `onStop()`, `gameTick()`.
+enum GameState { case ready, playing, gameOver }
+
 class GameBase: MiniGame {
     var active = false
     var lastBounds = CGRect.zero
@@ -25,15 +36,17 @@ class GameBase: MiniGame {
     var scoreOverlay: NSWindow?
     var scoreLabel: NSTextField?
     var score = 0
+    let layerPool = LayerPool()
 
     // Game over
-    var gameOver = false
+    var state: GameState = .ready
+    var gameOver: Bool { state == .gameOver }
     var gameEndMach: UInt64 = 0
     let gameOverDelay: CGFloat = 2.5
 
     // Timer
     private var gameTimer: DispatchSourceTimer?
-    var timerIntervalMs: Int = 2  // subclass can override before super.start()
+    var timerIntervalMs: Int = 8  // subclass can override before super.start()
 
     // MARK: - Mach Time
 
@@ -70,7 +83,7 @@ class GameBase: MiniGame {
         screenH = (NSScreen.main ?? NSScreen.screens[0]).frame.height
         lastMach = mach_absolute_time()
         score = 0
-        gameOver = false
+        state = .playing
 
         onStart(screen: screen, pip: pip)
 
@@ -107,13 +120,12 @@ class GameBase: MiniGame {
         borderRef?.hide()
 
         onStop()
+        layerPool.drain()
 
         borderRef = nil
 
         let sw = scoreOverlay
-        let cleanup = { sw?.orderOut(nil) }
-        if Thread.isMainThread { cleanup() }
-        else { DispatchQueue.main.async { cleanup() } }
+        onMain { sw?.orderOut(nil) }
         scoreOverlay = nil
         scoreLabel = nil
     }
@@ -154,8 +166,13 @@ class GameBase: MiniGame {
 
     // MARK: - Shared Utilities
 
-    /// Re-read PiP size from AX (call each tick for resize-aware games)
+    /// Re-read PiP size from AX (call each tick for resize-aware games).
+    /// Throttled to at most once per 500ms since PiP doesn't resize during gameplay.
+    private var lastPipSizeRefresh: UInt64 = 0
     func refreshPipSize() {
+        let now = mach_absolute_time()
+        if lastPipSizeRefresh != 0 && machToSeconds(now - lastPipSizeRefresh) < 0.5 { return }
+        lastPipSizeRefresh = now
         guard let axWindow = cachedAXWindow else { return }
         var sizeRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(axWindow, kAXSizeAttribute as CFString, &sizeRef) == .success,
@@ -202,57 +219,135 @@ class GameBase: MiniGame {
 
     /// Trigger game over state.
     func triggerGameOver(message: String) {
-        gameOver = true
+        state = .gameOver
         gameEndMach = mach_absolute_time()
-        scoreLabel?.stringValue = message
+        scoreLabel?.attributedStringValue = Self.styledMessage(message)
     }
 
-    /// Create the standard score overlay window (centered top of screen).
+    // Shared mint color for score displays
+    static let scoreMint = NSColor(red: 0.55, green: 1.0, blue: 0.78, alpha: 1.0)
+
+    /// Create the standard score overlay window — liquid glass pill (centered top of screen).
     func createScoreOverlay(screen: CGRect, width: CGFloat = 160) {
-        let sw = NSWindow(contentRect: NSRect(x: screen.midX - width / 2, y: screenH - 55,
-                                               width: width, height: 44),
+        let pillH: CGFloat = 36
+        let sw = NSWindow(contentRect: NSRect(x: screen.midX - width / 2, y: screenH - 56,
+                                               width: width, height: pillH),
                           styleMask: .borderless, backing: .buffered, defer: false)
         sw.isOpaque = false
         sw.backgroundColor = .clear
         sw.level = .floating
         sw.ignoresMouseEvents = true
-        sw.hasShadow = false
+        sw.hasShadow = true
         sw.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
 
-        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: 44))
+        let vibrancy = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: width, height: pillH))
         vibrancy.material = .hudWindow
         vibrancy.blendingMode = .behindWindow
         vibrancy.state = .active
         vibrancy.wantsLayer = true
-        vibrancy.layer?.cornerRadius = 8
+        vibrancy.layer?.cornerRadius = pillH / 2
+        vibrancy.layer?.borderWidth = 0.5
+        vibrancy.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
+        vibrancy.layer?.masksToBounds = true
         sw.contentView = vibrancy
 
-        let label = NSTextField(frame: NSRect(x: 0, y: 0, width: width, height: 44))
+        let label = NSTextField(frame: NSRect(x: 12, y: 0, width: width - 24, height: pillH))
         label.isEditable = false
         label.isBordered = false
         label.backgroundColor = .clear
-        label.textColor = .white
-        label.font = NSFont.monospacedSystemFont(ofSize: 24, weight: .bold)
         label.alignment = .center
-        label.stringValue = "0"
+        label.usesSingleLineMode = true
+        label.cell?.isScrollable = false
+        label.cell?.wraps = false
+        // Vertically center text by using the cell's drawing rect
+        (label.cell as? NSTextFieldCell)?.drawsBackground = false
+        label.attributedStringValue = Self.styledScore("0")
         vibrancy.addSubview(label)
         sw.orderFrontRegardless()
         scoreOverlay = sw
         scoreLabel = label
     }
 
+    /// Styled single-value score string (mint, glow, heavy mono).
+    static func styledScore(_ value: String, size: CGFloat = 20) -> NSAttributedString {
+        let shadow = NSShadow()
+        shadow.shadowColor = scoreMint.withAlphaComponent(0.7)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = .zero
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        return NSAttributedString(string: value, attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: size, weight: .heavy),
+            .foregroundColor: scoreMint,
+            .kern: 2.0,
+            .shadow: shadow,
+            .paragraphStyle: style,
+        ])
+    }
+
+    /// Styled "left : right" score string for versus modes.
+    static func styledVersusScore(_ left: String, _ right: String, size: CGFloat = 20) -> NSAttributedString {
+        let mint = scoreMint
+        let dimMint = mint.withAlphaComponent(0.5)
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .heavy)
+        let colonFont = NSFont.monospacedSystemFont(ofSize: size - 4, weight: .medium)
+        let shadow = NSShadow()
+        shadow.shadowColor = mint.withAlphaComponent(0.7)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = .zero
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+
+        let result = NSMutableAttributedString()
+        result.append(NSAttributedString(string: left, attributes: [
+            .font: font, .foregroundColor: mint,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        result.append(NSAttributedString(string: " : ", attributes: [
+            .font: colonFont, .foregroundColor: dimMint,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        result.append(NSAttributedString(string: right, attributes: [
+            .font: font, .foregroundColor: mint,
+            .shadow: shadow, .paragraphStyle: style,
+        ]))
+        return result
+    }
+
+    /// Styled message string (e.g. "YOU WIN", "GAME OVER").
+    static func styledMessage(_ text: String, size: CGFloat = 18) -> NSAttributedString {
+        let mint = scoreMint
+        let shadow = NSShadow()
+        shadow.shadowColor = mint.withAlphaComponent(0.7)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = .zero
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        return NSAttributedString(string: text, attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: size, weight: .heavy),
+            .foregroundColor: mint, .kern: 8.0,
+            .shadow: shadow, .paragraphStyle: style,
+        ])
+    }
+
+    /// Pulse the score overlay (call on score change).
+    func pulseScoreOverlay() {
+        if let layer = scoreOverlay?.contentView?.layer {
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
+            pulse.fromValue = 1.08
+            pulse.toValue = 1.0
+            pulse.duration = 0.2
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(pulse, forKey: "scorePulse")
+        }
+    }
+
     /// Create a fullscreen overlay window for game graphics. Returns (window, rootLayer).
     func createFullscreenOverlay(screen: CGRect) -> (NSWindow, CALayer) {
-        let ow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: screen.width, height: screenH),
-                          styleMask: .borderless, backing: .buffered, defer: false)
-        ow.isOpaque = false
-        ow.backgroundColor = .clear
-        ow.level = .floating
-        ow.ignoresMouseEvents = true
-        ow.hasShadow = false
-        ow.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
-        ow.contentView!.wantsLayer = true
-        let rootLayer = ow.contentView!.layer!
+        let ow = createFloatingWindow(frame: NSRect(x: 0, y: 0, width: screen.width, height: screenH))
+        guard let rootLayer = ow.contentView?.layer else {
+            fatalError("[GameBase] Overlay window missing layer after wantsLayer=true")
+        }
         ow.orderFrontRegardless()
         return (ow, rootLayer)
     }
@@ -322,5 +417,88 @@ class GameBase: MiniGame {
             layer.bounds = CGRect(x: 0, y: 0, width: w * scale, height: h * scale)
         }
         return layer
+    }
+
+    // MARK: - Convenience Helpers
+
+    /// Run a block on the main thread. Uses async dispatch when off-main
+    /// to avoid deadlocks. If you need synchronous return, use `onMainSync`.
+    func onMain(_ body: @escaping () -> Void) {
+        if Thread.isMainThread { body() }
+        else { DispatchQueue.main.async { body() } }
+    }
+
+    /// Run a block on the main thread and wait for the result.
+    /// Warning: Will deadlock if called from a queue the main thread is waiting on.
+    func onMainSync<T>(_ body: () -> T) -> T {
+        if Thread.isMainThread { return body() }
+        return DispatchQueue.main.sync { body() }
+    }
+
+    /// Convert AX Y coordinate (top-down) to NS/Quartz Y (bottom-up).
+    func axToNS(y: CGFloat, height: CGFloat) -> CGFloat {
+        screenH - y - height
+    }
+
+    /// Create a floating borderless window (for game overlays, death screens, etc.).
+    func createFloatingWindow(frame: NSRect) -> NSWindow {
+        let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        w.isOpaque = false
+        w.backgroundColor = .clear
+        w.level = .floating
+        w.ignoresMouseEvents = true
+        w.hasShadow = false
+        w.collectionBehavior = [.canJoinAllSpaces, .stationary, .transient, .ignoresCycle]
+        guard let cv = w.contentView else {
+            fatalError("[GameBase] NSWindow created without contentView")
+        }
+        cv.wantsLayer = true
+        return w
+    }
+
+    /// Current input state for clean polling.
+    struct GameInput {
+        let mouse: CGPoint?
+        let mouseDown: Bool
+        let rightMouseDown: Bool
+    }
+
+    func currentInput() -> GameInput {
+        GameInput(
+            mouse: mousePosition(),
+            mouseDown: NSEvent.pressedMouseButtons & 1 != 0,
+            rightMouseDown: NSEvent.pressedMouseButtons & 2 != 0
+        )
+    }
+
+    /// Clamp a velocity vector to a maximum speed.
+    static func clampSpeed(_ vel: inout CGPoint, max maxSpeed: CGFloat) {
+        let speed = sqrt(vel.x * vel.x + vel.y * vel.y)
+        guard speed > maxSpeed else { return }
+        let scale = maxSpeed / speed
+        vel.x *= scale
+        vel.y *= scale
+    }
+
+    // MARK: - Collision Helpers
+
+    static func rectsCollide(_ a: CGRect, _ b: CGRect) -> Bool {
+        return a.intersects(b)
+    }
+
+    static func circleHitsRect(center: CGPoint, radius: CGFloat, rect: CGRect) -> Bool {
+        let cx = max(rect.minX, min(center.x, rect.maxX))
+        let cy = max(rect.minY, min(center.y, rect.maxY))
+        let dx = center.x - cx, dy = center.y - cy
+        return dx * dx + dy * dy <= radius * radius
+    }
+
+    static func distance(_ a: CGPoint, _ b: CGPoint) -> CGFloat {
+        let dx = a.x - b.x, dy = a.y - b.y
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    static func pointInRect(_ point: CGPoint, _ rect: CGRect) -> Bool {
+        return rect.contains(point)
     }
 }

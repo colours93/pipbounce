@@ -1,72 +1,72 @@
 import Cocoa
 import ApplicationServices
 
-let runner = RunnerGame()
+
 
 class RunnerGame: GameBase {
 
-    // MARK: - Pixel Art Sprites
+    // MARK: - Hell/Inferno Theme
 
-    private enum Sprites {
-        // 10x4 obstacle tiles per zone, rendered at scale 3 → 30x12, tiled vertically
-        static let greyTile: CGImage? = GameBase.renderPixelArt([
-            [0x6B6B6B, 0x7A7A7A, 0x888888, 0x6B6B6B, 0x7A7A7A, 0x6B6B6B, 0x888888, 0x7A7A7A, 0x6B6B6B, 0x7A7A7A],
-            [0x7A7A7A, 0x555555, 0x6B6B6B, 0x888888, 0x555555, 0x7A7A7A, 0x6B6B6B, 0x555555, 0x888888, 0x6B6B6B],
-            [0x888888, 0x6B6B6B, 0x4A4A4A, 0x7A7A7A, 0x6B6B6B, 0x888888, 0x4A4A4A, 0x7A7A7A, 0x6B6B6B, 0x888888],
-            [0x6B6B6B, 0x7A7A7A, 0x6B6B6B, 0x555555, 0x888888, 0x6B6B6B, 0x7A7A7A, 0x6B6B6B, 0x555555, 0x7A7A7A],
-        ], scale: 3)
-
-        static let blueTile: CGImage? = GameBase.renderPixelArt([
-            [0x3366AA, 0x4488CC, 0x55AAEE, 0x3366AA, 0xCCEEFF, 0x4488CC, 0x3366AA, 0x55AAEE, 0x4488CC, 0x3366AA],
-            [0x4488CC, 0x224488, 0x3366AA, 0x55AAEE, 0x3366AA, 0x224488, 0x4488CC, 0xCCEEFF, 0x3366AA, 0x4488CC],
-            [0x55AAEE, 0x3366AA, 0x4488CC, 0x224488, 0x4488CC, 0x55AAEE, 0x3366AA, 0x4488CC, 0x224488, 0x55AAEE],
-            [0x3366AA, 0x4488CC, 0x224488, 0x3366AA, 0x55AAEE, 0x3366AA, 0x224488, 0x3366AA, 0x4488CC, 0x3366AA],
-        ], scale: 3)
-
-        static let purpleTile: CGImage? = GameBase.renderPixelArt([
-            [0x7733AA, 0x8844BB, 0xCC66FF, 0x7733AA, 0x8844BB, 0x7733AA, 0xCC66FF, 0x8844BB, 0x7733AA, 0x8844BB],
-            [0x8844BB, 0x552288, 0x7733AA, 0xCC66FF, 0x552288, 0x8844BB, 0x7733AA, 0x552288, 0xCC66FF, 0x7733AA],
-            [0x7733AA, 0x8844BB, 0x552288, 0x8844BB, 0x7733AA, 0xCC66FF, 0x552288, 0x8844BB, 0x7733AA, 0xCC66FF],
-            [0x552288, 0x7733AA, 0x8844BB, 0x7733AA, 0xCC66FF, 0x552288, 0x7733AA, 0x8844BB, 0x552288, 0x7733AA],
-        ], scale: 3)
-
-        static let brownTile: CGImage? = GameBase.renderPixelArt([
-            [0x8B6534, 0x9E7744, 0xBB9955, 0x8B6534, 0x9E7744, 0x8B6534, 0xBB9955, 0x9E7744, 0x8B6534, 0x9E7744],
-            [0x9E7744, 0x5C3D1A, 0x8B6534, 0xBB9955, 0x5C3D1A, 0x9E7744, 0x8B6534, 0x5C3D1A, 0xBB9955, 0x8B6534],
-            [0x8B6534, 0x9E7744, 0x5C3D1A, 0x9E7744, 0x8B6534, 0xBB9955, 0x5C3D1A, 0x9E7744, 0x8B6534, 0xBB9955],
-            [0x5C3D1A, 0x8B6534, 0x9E7744, 0x8B6534, 0xBB9955, 0x5C3D1A, 0x8B6534, 0x9E7744, 0x5C3D1A, 0x9E7744],
-        ], scale: 3)
-
-        static let forestTile: CGImage? = GameBase.renderPixelArt([
-            [0x556B55, 0x667766, 0x778877, 0x556B55, 0x2D5C2D, 0x667766, 0x556B55, 0x778877, 0x667766, 0x556B55],
-            [0x667766, 0x445544, 0x556B55, 0x2D5C2D, 0x667766, 0x445544, 0x667766, 0x2D5C2D, 0x556B55, 0x667766],
-            [0x778877, 0x556B55, 0x445544, 0x667766, 0x556B55, 0x778877, 0x445544, 0x667766, 0x2D5C2D, 0x778877],
-            [0x556B55, 0x2D5C2D, 0x667766, 0x556B55, 0x778877, 0x556B55, 0x2D5C2D, 0x556B55, 0x667766, 0x556B55],
-        ], scale: 3)
-
-        static let crimsonTile: CGImage? = GameBase.renderPixelArt([
-            [0x8B2222, 0xAA3333, 0xFF4444, 0x8B2222, 0xAA3333, 0x8B2222, 0xFF4444, 0xAA3333, 0x8B2222, 0xAA3333],
-            [0xAA3333, 0x551111, 0x8B2222, 0xFF4444, 0x551111, 0xAA3333, 0x8B2222, 0x551111, 0xFF4444, 0x8B2222],
-            [0x8B2222, 0xAA3333, 0x551111, 0xAA3333, 0x8B2222, 0xFF4444, 0x551111, 0xAA3333, 0x8B2222, 0xFF4444],
-            [0x551111, 0x8B2222, 0xAA3333, 0x8B2222, 0xFF4444, 0x551111, 0x8B2222, 0xAA3333, 0x551111, 0x8B2222],
-        ], scale: 3)
-
-        static func tileForZone(_ zone: Int) -> CGImage? {
-            switch (zone - 1) % 6 {
-            case 0: return greyTile
-            case 1: return blueTile
-            case 2: return purpleTile
-            case 3: return brownTile
-            case 4: return forestTile
-            case 5: return crimsonTile
-            default: return greyTile
-            }
+    static func zoneName(_ zone: Int) -> String {
+        switch zone {
+        case 1: return "THE DESCENT"
+        case 2: return "EMBER FIELDS"
+        case 3: return "ASHEN DEPTHS"
+        case 4: return "THE FURNACE"
+        case 5: return "RIVER STYX"
+        case 6: return "THE ABYSS"
+        default: return "ZONE \(zone)"
         }
     }
+
+    static func zoneColor(_ zone: Int) -> NSColor {
+        switch zone {
+        case 1: return NSColor(calibratedRed: 1.0, green: 0.45, blue: 0.1,  alpha: 1.0)
+        case 2: return NSColor(calibratedRed: 1.0, green: 0.25, blue: 0.05, alpha: 1.0)
+        case 3: return NSColor(calibratedRed: 0.9, green: 0.15, blue: 0.0,  alpha: 1.0)
+        case 4: return NSColor(calibratedRed: 1.0, green: 0.6,  blue: 0.0,  alpha: 1.0)
+        case 5: return NSColor(calibratedRed: 0.4, green: 0.0,  blue: 0.8,  alpha: 1.0)
+        case 6: return NSColor(calibratedRed: 0.85, green: 0.0, blue: 0.15, alpha: 1.0)
+        default: return NSColor(calibratedRed: 1.0, green: 0.45, blue: 0.1, alpha: 1.0)
+        }
+    }
+
+    static func zoneOverlayColor(_ zone: Int) -> NSColor {
+        switch zone {
+        case 1: return NSColor(calibratedRed: 0.8, green: 0.2, blue: 0.0,  alpha: 0.018)
+        case 2: return NSColor(calibratedRed: 0.9, green: 0.15, blue: 0.0, alpha: 0.025)
+        case 3: return NSColor(calibratedRed: 1.0, green: 0.05, blue: 0.0, alpha: 0.030)
+        case 4: return NSColor(calibratedRed: 1.0, green: 0.4,  blue: 0.0, alpha: 0.035)
+        case 5: return NSColor(calibratedRed: 0.3, green: 0.0,  blue: 0.6, alpha: 0.030)
+        case 6: return NSColor(calibratedRed: 0.7, green: 0.0,  blue: 0.1, alpha: 0.045)
+        default: return .clear
+        }
+    }
+
+    // Pre-built ember palette for near-miss particles (avoids rebuilding every call)
+    private static let nearMissEmberPalette: [CGColor] = {
+        let palette: [(CGColor, Int)] = [
+            (NSColor(red: 1.00, green: 0.13, blue: 0.00, alpha: 1).cgColor, 4),
+            (NSColor(red: 1.00, green: 0.40, blue: 0.00, alpha: 1).cgColor, 5),
+            (NSColor(red: 1.00, green: 0.67, blue: 0.00, alpha: 1).cgColor, 4),
+            (NSColor(red: 1.00, green: 0.87, blue: 0.30, alpha: 1).cgColor, 3),
+            (NSColor(red: 1.00, green: 0.95, blue: 0.80, alpha: 1).cgColor, 2),
+            (NSColor(red: 1.00, green: 1.00, blue: 1.00, alpha: 1).cgColor, 1),
+        ]
+        var flat: [CGColor] = []
+        for (color, weight) in palette {
+            for _ in 0..<weight { flat.append(color) }
+        }
+        return flat
+    }()
+
+    // MARK: - Pixel Art Sprites (see RunnerSprites.swift)
 
     private struct Obstacle {
         let topLayer: CALayer
         let bottomLayer: CALayer
+        let topCapLayer: CALayer
+        let bottomCapLayer: CALayer
         let gapTopIndicator: CALayer
         let gapBottomIndicator: CALayer
         let gapTopGlow: CALayer
@@ -83,7 +83,9 @@ class RunnerGame: GameBase {
     }
 
     private var obstacles: [Obstacle] = []
-    private let obstacleWidth: CGFloat = 30
+    private let obstacleBodyWidth: CGFloat = 48   // 16px * scale 3
+    private let obstacleCapWidth: CGFloat = 54    // 18px * scale 3
+    private let obstacleCapHeight: CGFloat = 18   // 6px * scale 3
 
     // Speed
     private var scrollSpeed: CGFloat = 200
@@ -115,6 +117,7 @@ class RunnerGame: GameBase {
         var vx: CGFloat
         var vy: CGFloat
         var life: CGFloat
+        var maxLife: CGFloat
     }
     private var particles: [Particle] = []
 
@@ -161,6 +164,8 @@ class RunnerGame: GameBase {
         let (ow, rootLayer) = createFullscreenOverlay(screen: screen)
         overlayLayer = rootLayer
         overlayWindow = ow
+        // Set initial zone atmosphere
+        ow.backgroundColor = RunnerGame.zoneOverlayColor(zone)
 
         createScoreOverlay(screen: screen)
     }
@@ -179,14 +184,32 @@ class RunnerGame: GameBase {
         refreshPipSize()
         let size = cachedPipSize
 
-        // Game over state
+        // Game over state — multi-phase hellfire flash
         if gameOver {
             gameOverFlashTimer -= dt
             if gameOverFlashTimer > 0 {
-                overlayWindow?.backgroundColor = NSColor.red.withAlphaComponent(0.3)
+                // Phase 1 (0.68–0.76s remaining): white-hot impact flash
+                if gameOverFlashTimer > 0.68 {
+                    let t = (gameOverFlashTimer - 0.68) / 0.08
+                    let alpha = 0.55 * t
+                    overlayWindow?.backgroundColor = NSColor.white.withAlphaComponent(alpha)
+                }
+                // Phase 2 (0.50–0.68s remaining): blood red flash
+                else if gameOverFlashTimer > 0.50 {
+                    let t = (gameOverFlashTimer - 0.50) / 0.18
+                    let alpha = 0.35 * t + 0.05
+                    overlayWindow?.backgroundColor = NSColor(red: 0.9, green: 0.05, blue: 0.0, alpha: alpha)
+                }
+                // Phase 3 (0.0–0.50s remaining): deep crimson smolder
+                else {
+                    let t = gameOverFlashTimer / 0.50
+                    let alpha = 0.22 * t
+                    overlayWindow?.backgroundColor = NSColor(red: 0.6, green: 0.02, blue: 0.0, alpha: alpha)
+                }
             } else {
                 overlayWindow?.backgroundColor = .clear
             }
+            updateParticles(dt: dt)
             if checkGameOverTimeout() { return }
             return
         }
@@ -196,10 +219,26 @@ class RunnerGame: GameBase {
             zonePauseTimer -= dt
             zoneFlashTimer -= dt
             if zoneFlashTimer > 0 {
-                scoreLabel?.stringValue = "ZONE \(zone)"
-                scoreLabel?.textColor = NSColor.yellow
+                let name = RunnerGame.zoneName(zone)
+                let color = RunnerGame.zoneColor(zone)
+                let pStyle = NSMutableParagraphStyle()
+                pStyle.alignment = .center
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .heavy),
+                    .foregroundColor: color,
+                    .kern: NSNumber(value: 3.0),
+                    .paragraphStyle: pStyle,
+                    .shadow: {
+                        let s = NSShadow()
+                        s.shadowColor = color.withAlphaComponent(0.9)
+                        s.shadowBlurRadius = 12
+                        s.shadowOffset = .zero
+                        return s
+                    }()
+                ]
+                scoreLabel?.attributedStringValue = NSAttributedString(string: name, attributes: attrs)
             } else {
-                scoreLabel?.stringValue = "\(score)"
+                scoreLabel?.attributedStringValue = Self.styledScore("\(score)")
                 scoreLabel?.textColor = .white
             }
             // Still move PiP during pause
@@ -227,17 +266,12 @@ class RunnerGame: GameBase {
         let tightenProgress = min(CGFloat(score) / 30.0, 1.0)
         let currentGapExtra = maxGapExtra - (maxGapExtra - minGapExtra) * tightenProgress
 
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-
         // Move obstacles left and animate moving gaps
         for i in 0..<obstacles.count {
             obstacles[i].x -= scrollSpeed * dt
-            // Moving gaps
             if obstacles[i].gapAmplitude > 0 {
                 obstacles[i].gapPhase += obstacles[i].gapFrequency * dt
                 let newGapY = obstacles[i].gapBaseY + obstacles[i].gapAmplitude * sin(obstacles[i].gapPhase)
-                // Clamp to screen
                 let clampedGapY = max(screen.minY + 30, min(screen.maxY - obstacles[i].gapHeight - 30, newGapY))
                 obstacles[i].gapY = clampedGapY
             }
@@ -259,10 +293,12 @@ class RunnerGame: GameBase {
 
         // Remove off-screen obstacles
         obstacles.removeAll { obs in
-            let offscreen = obs.x + obstacleWidth < screen.minX - 40
+            let offscreen = obs.x + obstacleCapWidth < screen.minX - 40
             if offscreen {
                 obs.topLayer.removeFromSuperlayer()
                 obs.bottomLayer.removeFromSuperlayer()
+                obs.topCapLayer.removeFromSuperlayer()
+                obs.bottomCapLayer.removeFromSuperlayer()
                 obs.gapTopIndicator.removeFromSuperlayer()
                 obs.gapBottomIndicator.removeFromSuperlayer()
                 obs.gapTopGlow.removeFromSuperlayer()
@@ -274,30 +310,35 @@ class RunnerGame: GameBase {
         // Collision detection
         let pipRect = CGRect(x: pipX + 4, y: pipY + 4,
                              width: size.width - 8, height: size.height - 8)
+        let capExtra = (obstacleCapWidth - obstacleBodyWidth) / 2
 
         for obs in obstacles {
             let topRect = CGRect(x: obs.x, y: screen.minY,
-                                 width: obstacleWidth, height: obs.gapY - screen.minY)
+                                 width: obstacleBodyWidth, height: obs.gapY - screen.minY)
             let gapBottom = obs.gapY + obs.gapHeight
             let bottomRect = CGRect(x: obs.x, y: gapBottom,
-                                    width: obstacleWidth, height: screen.maxY - gapBottom)
+                                    width: obstacleBodyWidth, height: screen.maxY - gapBottom)
+            let topCapRect = CGRect(x: obs.x - capExtra, y: obs.gapY - obstacleCapHeight,
+                                    width: obstacleCapWidth, height: obstacleCapHeight)
+            let bottomCapRect = CGRect(x: obs.x - capExtra, y: gapBottom,
+                                       width: obstacleCapWidth, height: obstacleCapHeight)
 
-            if pipRect.intersects(topRect) || pipRect.intersects(bottomRect) {
+            if Self.rectsCollide(pipRect, topRect) || Self.rectsCollide(pipRect, bottomRect) ||
+               Self.rectsCollide(pipRect, topCapRect) || Self.rectsCollide(pipRect, bottomCapRect) {
                 doTriggerGameOver(now: now)
-                CATransaction.commit()
                 return
             }
         }
 
-        // Scoring: when PiP passes an obstacle
+        // Scoring
         for i in 0..<obstacles.count {
-            if !obstacles[i].scored && obstacles[i].x + obstacleWidth < pipX {
+            if !obstacles[i].scored && obstacles[i].x + obstacleBodyWidth < pipX {
                 obstacles[i].scored = true
                 score += 1
                 obstaclesPassed += 1
-                scoreLabel?.stringValue = "\(score)"
+                scoreLabel?.attributedStringValue = Self.styledScore("\(score)")
 
-                // Near-miss particle burst
+                // Near-miss ember burst
                 let obs = obstacles[i]
                 let gapBottom = obs.gapY + obs.gapHeight
                 let topClearance = pipY - obs.gapY
@@ -312,87 +353,103 @@ class RunnerGame: GameBase {
                     zone += 1
                     zonePauseTimer = 0.5
                     zoneFlashTimer = 0.8
-                    // Update existing obstacle tiles
-                    let newTile = Sprites.tileForZone(zone)
+                    // Update existing obstacle tiles and caps
+                    let newTile = RunnerSprites.tileForZone(zone)
+                    let newCap = RunnerSprites.capForZone(zone)
                     for o in obstacles {
                         o.topLayer.contents = newTile
                         o.bottomLayer.contents = newTile
+                        o.topCapLayer.contents = newCap
+                        o.bottomCapLayer.contents = newCap
                     }
+                    // Update atmosphere
+                    overlayWindow?.backgroundColor = RunnerGame.zoneOverlayColor(zone)
                 }
             }
         }
 
         // Move PiP
-        if !movePip(to: CGPoint(x: pipX, y: pipY)) {
-            CATransaction.commit()
-            return
-        }
+        if !movePip(to: CGPoint(x: pipX, y: pipY)) { return }
 
         // Update visuals
         let bounds = CGRect(origin: CGPoint(x: pipX, y: pipY), size: size)
         lastBounds = bounds
 
-        for obs in obstacles {
-            let gapBottom = obs.gapY + obs.gapHeight
+        withTransaction {
+            for obs in obstacles {
+                let gapBottom = obs.gapY + obs.gapHeight
+                let capExtra = (obstacleCapWidth - obstacleBodyWidth) / 2
 
-            let topH = obs.gapY - screen.minY
-            obs.topLayer.frame = CGRect(x: obs.x,
-                                        y: screenH - screen.minY - topH,
-                                        width: obstacleWidth, height: max(0, topH))
+                // Top body
+                let topBodyH = max(0, obs.gapY - obstacleCapHeight - screen.minY)
+                obs.topLayer.frame = CGRect(x: obs.x,
+                                            y: screenH - screen.minY - topBodyH,
+                                            width: obstacleBodyWidth, height: topBodyH)
 
-            let bottomH = screen.maxY - gapBottom
-            obs.bottomLayer.frame = CGRect(x: obs.x,
-                                           y: 0,
-                                           width: obstacleWidth, height: max(0, bottomH))
+                // Top cap
+                obs.topCapLayer.frame = CGRect(x: obs.x - capExtra,
+                                               y: screenH - obs.gapY,
+                                               width: obstacleCapWidth, height: obstacleCapHeight)
 
-            // Gap glow color based on gap tightness
-            let gapRatio = obs.gapHeight / size.height
-            let glowColor: CGColor
-            if gapRatio > 1.3 {
-                glowColor = NSColor(red: 0.0, green: 0.7, blue: 0.3, alpha: 0.25).cgColor
-            } else if gapRatio > 1.1 {
-                glowColor = NSColor(red: 0.9, green: 0.7, blue: 0.0, alpha: 0.25).cgColor
-            } else {
-                glowColor = NSColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 0.25).cgColor
+                // Bottom body
+                let bottomBodyH = max(0, screen.maxY - gapBottom - obstacleCapHeight)
+                obs.bottomLayer.frame = CGRect(x: obs.x,
+                                               y: 0,
+                                               width: obstacleBodyWidth, height: bottomBodyH)
+
+                // Bottom cap
+                obs.bottomCapLayer.frame = CGRect(x: obs.x - capExtra,
+                                                  y: screenH - gapBottom - obstacleCapHeight,
+                                                  width: obstacleCapWidth, height: obstacleCapHeight)
+
+                // Hellish gap glow colors
+                let gapRatio = obs.gapHeight / size.height
+                let glowColor: CGColor
+                if gapRatio > 1.3 {
+                    glowColor = NSColor(red: 0.80, green: 0.28, blue: 0.00, alpha: 0.18).cgColor
+                } else if gapRatio > 1.1 {
+                    glowColor = NSColor(red: 1.00, green: 0.50, blue: 0.00, alpha: 0.30).cgColor
+                } else {
+                    glowColor = NSColor(red: 1.00, green: 0.15, blue: 0.00, alpha: 0.40).cgColor
+                }
+
+                let indicatorColor: CGColor
+                if gapRatio > 1.3 {
+                    indicatorColor = NSColor(red: 0.85, green: 0.35, blue: 0.00, alpha: 0.45).cgColor
+                } else if gapRatio > 1.1 {
+                    indicatorColor = NSColor(red: 1.00, green: 0.65, blue: 0.05, alpha: 0.70).cgColor
+                } else {
+                    indicatorColor = NSColor(red: 1.00, green: 0.92, blue: 0.70, alpha: 0.90).cgColor
+                }
+
+                obs.gapTopIndicator.backgroundColor = indicatorColor
+                obs.gapTopIndicator.frame = CGRect(x: obs.x - capExtra - 2,
+                                                   y: screenH - obs.gapY,
+                                                   width: obstacleCapWidth + 4, height: 2)
+                obs.gapBottomIndicator.backgroundColor = indicatorColor
+                obs.gapBottomIndicator.frame = CGRect(x: obs.x - capExtra - 2,
+                                                      y: screenH - gapBottom - 2,
+                                                      width: obstacleCapWidth + 4, height: 2)
+
+                obs.gapTopGlow.backgroundColor = glowColor
+                obs.gapTopGlow.frame = CGRect(x: obs.x - capExtra - 6,
+                                              y: screenH - obs.gapY - 6,
+                                              width: obstacleCapWidth + 12, height: 6)
+                obs.gapBottomGlow.backgroundColor = glowColor
+                obs.gapBottomGlow.frame = CGRect(x: obs.x - capExtra - 6,
+                                                 y: screenH - gapBottom,
+                                                 width: obstacleCapWidth + 12, height: 6)
+
+                // Ambient flame particles from obstacle edges
+                emitAmbientFlames(obsX: obs.x, gapY: obs.gapY, gapBottom: gapBottom)
             }
 
-            // Gap indicators (thin lines)
-            let indicatorColor: CGColor
-            if gapRatio > 1.3 {
-                indicatorColor = NSColor(red: 0.0, green: 0.55, blue: 0.3, alpha: 0.5).cgColor
-            } else if gapRatio > 1.1 {
-                indicatorColor = NSColor(red: 0.9, green: 0.7, blue: 0.0, alpha: 0.5).cgColor
-            } else {
-                indicatorColor = NSColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 0.5).cgColor
-            }
+            // Update particles
+            updateParticles(dt: dt)
 
-            obs.gapTopIndicator.backgroundColor = indicatorColor
-            obs.gapTopIndicator.frame = CGRect(x: obs.x - 2,
-                                               y: screenH - obs.gapY - 2,
-                                               width: obstacleWidth + 4, height: 2)
-            obs.gapBottomIndicator.backgroundColor = indicatorColor
-            obs.gapBottomIndicator.frame = CGRect(x: obs.x - 2,
-                                                  y: screenH - gapBottom,
-                                                  width: obstacleWidth + 4, height: 2)
-
-            // Glow layers (wider, softer)
-            obs.gapTopGlow.backgroundColor = glowColor
-            obs.gapTopGlow.frame = CGRect(x: obs.x - 6,
-                                          y: screenH - obs.gapY - 6,
-                                          width: obstacleWidth + 12, height: 6)
-            obs.gapBottomGlow.backgroundColor = glowColor
-            obs.gapBottomGlow.frame = CGRect(x: obs.x - 6,
-                                             y: screenH - gapBottom - 1,
-                                             width: obstacleWidth + 12, height: 6)
+            // Border sync
+            syncBorder(around: bounds)
         }
-
-        // Update particles
-        updateParticles(dt: dt)
-
-        // Border sync
-        syncBorder(around: bounds)
-
-        CATransaction.commit()
     }
 
     // MARK: - Helpers
@@ -405,28 +462,42 @@ class RunnerGame: GameBase {
         let maxGapY = screen.maxY - gapHeight - 60
         let gapY = CGFloat.random(in: minGapY...max(minGapY, maxGapY))
 
-        // ~30% of obstacles get moving gaps
         let isMoving = CGFloat.random(in: 0...1) < 0.3
         let amplitude: CGFloat = isMoving ? CGFloat.random(in: 30...70) : 0
         let frequency: CGFloat = isMoving ? CGFloat.random(in: 1.5...3.0) : 0
 
         let topLayer = CALayer()
-        topLayer.contents = Sprites.tileForZone(zone)
+        topLayer.contents = RunnerSprites.tileForZone(zone)
         topLayer.magnificationFilter = .nearest
         topLayer.minificationFilter = .nearest
-        topLayer.contentsGravity = .resize
+        topLayer.contentsGravity = .resizeAspect
         topLayer.cornerRadius = 3
         topLayer.masksToBounds = true
         rootLayer.addSublayer(topLayer)
 
         let bottomLayer = CALayer()
-        bottomLayer.contents = Sprites.tileForZone(zone)
+        bottomLayer.contents = RunnerSprites.tileForZone(zone)
         bottomLayer.magnificationFilter = .nearest
         bottomLayer.minificationFilter = .nearest
-        bottomLayer.contentsGravity = .resize
+        bottomLayer.contentsGravity = .resizeAspect
         bottomLayer.cornerRadius = 3
         bottomLayer.masksToBounds = true
         rootLayer.addSublayer(bottomLayer)
+
+        let topCapLayer = CALayer()
+        topCapLayer.contents = RunnerSprites.capForZone(zone)
+        topCapLayer.magnificationFilter = .nearest
+        topCapLayer.minificationFilter = .nearest
+        topCapLayer.contentsGravity = .resize
+        rootLayer.addSublayer(topCapLayer)
+
+        let bottomCapLayer = CALayer()
+        bottomCapLayer.contents = RunnerSprites.capForZone(zone)
+        bottomCapLayer.magnificationFilter = .nearest
+        bottomCapLayer.minificationFilter = .nearest
+        bottomCapLayer.contentsGravity = .resize
+        bottomCapLayer.transform = CATransform3DMakeScale(1, -1, 1)
+        rootLayer.addSublayer(bottomCapLayer)
 
         let gapTopInd = CALayer()
         rootLayer.addSublayer(gapTopInd)
@@ -445,6 +516,8 @@ class RunnerGame: GameBase {
         obstacles.append(Obstacle(
             topLayer: topLayer,
             bottomLayer: bottomLayer,
+            topCapLayer: topCapLayer,
+            bottomCapLayer: bottomCapLayer,
             gapTopIndicator: gapTopInd,
             gapBottomIndicator: gapBottomInd,
             gapTopGlow: gapTopGlow,
@@ -460,76 +533,231 @@ class RunnerGame: GameBase {
         ))
     }
 
+    // MARK: - Ember Burst (near-miss)
+
     private func emitNearMissParticles(obsX: CGFloat, gapY: CGFloat, gapBottom: CGFloat,
                                         topClose: Bool, bottomClose: Bool) {
         guard let rootLayer = overlayLayer else { return }
-        let colors: [CGColor] = [
-            NSColor.yellow.cgColor, NSColor.cyan.cgColor,
-            NSColor.green.cgColor, NSColor.white.cgColor,
-            NSColor.orange.cgColor,
-        ]
 
-        let count = Int.random(in: 10...14)
+        // Hell ember palette — weighted toward orange/red, rare white-hot sparks
+        let flatPalette = Self.nearMissEmberPalette
+
+        let count = Int.random(in: 18...26)
         for _ in 0..<count {
             let fromTop = topClose && (!bottomClose || Bool.random())
+            let px = obsX + CGFloat.random(in: -4...obstacleCapWidth)
             let py = fromTop ? gapY : gapBottom
-            let layer = CALayer()
-            let sz: CGFloat = CGFloat.random(in: 3...6)
-            layer.frame = CGRect(x: obsX, y: screenH - py, width: sz, height: sz)
-            layer.backgroundColor = colors.randomElement()!
-            layer.cornerRadius = sz / 2
+
+            let isBigEmber = CGFloat.random(in: 0...1) < 0.25
+            let sz: CGFloat = isBigEmber ? CGFloat.random(in: 5...9) : CGFloat.random(in: 1.5...4)
+
+            let layer = layerPool.dequeue()
+            layer.frame = CGRect(x: 0, y: 0, width: sz, height: sz)
+            layer.cornerRadius = isBigEmber ? sz * 0.35 : sz / 2
+            layer.backgroundColor = flatPalette.randomElement()!
+            if isBigEmber {
+                layer.shadowColor = NSColor(red: 1, green: 0.4, blue: 0, alpha: 1).cgColor
+                layer.shadowOpacity = 0.9
+                layer.shadowRadius = 4
+                layer.shadowOffset = .zero
+            }
             rootLayer.addSublayer(layer)
 
+            let baseVX = CGFloat.random(in: -180...60)
+            let baseVY: CGFloat = fromTop
+                ? CGFloat.random(in: -80...140)
+                : CGFloat.random(in: 60...200)
+            let speedMult: CGFloat = isBigEmber ? 0.65 : 1.0
+            let life: CGFloat = isBigEmber
+                ? CGFloat.random(in: 0.35...0.60)
+                : CGFloat.random(in: 0.18...0.38)
+            let layerY = screenH - py + CGFloat.random(in: -3...3)
+
             particles.append(Particle(
-                layer: layer,
-                x: obsX,
-                y: screenH - py,
-                vx: CGFloat.random(in: -120...120),
-                vy: CGFloat.random(in: -120...120),
-                life: 0.2
+                layer: layer, x: px, y: layerY,
+                vx: baseVX * speedMult, vy: baseVY * speedMult,
+                life: life, maxLife: life
             ))
+            layer.position = CGPoint(x: px, y: layerY)
         }
     }
+
+    // MARK: - Ambient Flames (smoldering columns)
+
+    private func emitAmbientFlames(obsX: CGFloat, gapY: CGFloat, gapBottom: CGFloat) {
+        guard let rootLayer = overlayLayer else { return }
+        guard CGFloat.random(in: 0...1) < 0.30 else { return }
+
+        let count = Int.random(in: 1...2)
+        let emitFromTop = Bool.random()
+
+        for _ in 0..<count {
+            let capExtra = (obstacleCapWidth - obstacleBodyWidth) / 2
+            let px = (obsX - capExtra) + CGFloat.random(in: 0...obstacleCapWidth)
+            let originY: CGFloat = emitFromTop ? gapY : gapBottom
+
+            let sz: CGFloat = CGFloat.random(in: 1.0...3.0)
+
+            let isBright = CGFloat.random(in: 0...1) < 0.15
+            let emberColor: CGColor
+            if isBright {
+                emberColor = NSColor(red: 1.00, green: 0.65, blue: 0.10, alpha: 0.85).cgColor
+            } else {
+                let rVar = CGFloat.random(in: 0.75...0.95)
+                let gVar = CGFloat.random(in: 0.15...0.35)
+                emberColor = NSColor(red: rVar, green: gVar, blue: 0.00, alpha: 0.65).cgColor
+            }
+
+            let layer = layerPool.dequeue()
+            layer.frame = CGRect(x: 0, y: 0, width: sz, height: sz)
+            layer.cornerRadius = sz / 2
+            layer.backgroundColor = emberColor
+            rootLayer.addSublayer(layer)
+
+            let vx = CGFloat.random(in: -18...18)
+            let vy = CGFloat.random(in: 25...70)
+            let life: CGFloat = CGFloat.random(in: 0.20...0.45)
+            let layerY = screenH - originY
+
+            particles.append(Particle(
+                layer: layer, x: px, y: layerY,
+                vx: vx, vy: vy,
+                life: life, maxLife: life
+            ))
+            layer.position = CGPoint(x: px, y: layerY)
+        }
+    }
+
+    // MARK: - Particle System
 
     private func updateParticles(dt: CGFloat) {
         guard !particles.isEmpty else { return }
         particles.removeAll { p in
             let dead = p.life <= 0
-            if dead { p.layer.removeFromSuperlayer() }
+            if dead {
+                layerPool.enqueue(p.layer)
+                p.layer.removeFromSuperlayer()
+            }
             return dead
         }
         for i in 0..<particles.count {
             particles[i].life -= dt
             particles[i].x += particles[i].vx * dt
             particles[i].y += particles[i].vy * dt
-            let alpha = max(0, particles[i].life / 0.35)
+            particles[i].x += CGFloat.random(in: -0.4...0.4) // heat shimmer
+            let alpha = max(0, particles[i].life / particles[i].maxLife)
             particles[i].layer.opacity = Float(alpha)
             particles[i].layer.position = CGPoint(x: particles[i].x, y: particles[i].y)
         }
     }
 
-    private func doTriggerGameOver(now: UInt64) {
-        gameOverFlashTimer = 0.25
-        triggerGameOver(message: "GAME OVER \(score)")
-        scoreLabel?.font = NSFont.monospacedSystemFont(ofSize: 20, weight: .bold)
+    // MARK: - Game Over
 
-        // Shake score overlay
+    private func doTriggerGameOver(now: UInt64) {
+        gameOverFlashTimer = 0.76
+
+        // Hell-themed game over messages
+        let gameOverMessages = [
+            "YOUR SOUL: \(score)",
+            "CLAIMED: \(score)",
+            "CONDEMNED: \(score)",
+            "DEVOURED: \(score)",
+        ]
+        let message = gameOverMessages[score % gameOverMessages.count]
+        triggerGameOver(message: message)
+
+        // Style the score label with hellfire
+        let goStyle = NSMutableParagraphStyle()
+        goStyle.alignment = .center
+        let gameOverAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .heavy),
+            .foregroundColor: NSColor(calibratedRed: 0.85, green: 0.0, blue: 0.15, alpha: 1.0),
+            .kern: NSNumber(value: 2.0),
+            .paragraphStyle: goStyle,
+            .shadow: {
+                let s = NSShadow()
+                s.shadowColor = NSColor(calibratedRed: 1.0, green: 0.1, blue: 0.0, alpha: 0.85)
+                s.shadowBlurRadius = 14
+                s.shadowOffset = .zero
+                return s
+            }()
+        ]
+        scoreLabel?.attributedStringValue = NSAttributedString(string: message, attributes: gameOverAttrs)
+
+        // Death explosion
+        emitDeathExplosion()
+
+        // Violent shake
         if let sw = scoreOverlay {
             let origFrame = sw.frame
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-                sw.setFrame(origFrame.offsetBy(dx: 5, dy: 0), display: true)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                sw.setFrame(origFrame.offsetBy(dx: -5, dy: 0), display: true)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) {
-                sw.setFrame(origFrame.offsetBy(dx: 3, dy: 0), display: true)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                sw.setFrame(origFrame, display: true)
+            let shakes: [(Double, CGFloat, CGFloat)] = [
+                (0.02, -9, 4), (0.05, 8, -5), (0.08, -7, 3),
+                (0.11, 6, -2), (0.14, -4, 2), (0.17, 3, -1),
+                (0.20, -2, 0), (0.23, 0, 0),
+            ]
+            for (delay, dx, dy) in shakes {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    sw.setFrame(origFrame.offsetBy(dx: dx, dy: dy), display: true)
+                }
             }
         }
 
         print("Runner game over: score=\(score)")
+    }
+
+    private func emitDeathExplosion() {
+        guard let rootLayer = overlayLayer else { return }
+
+        let palette: [CGColor] = [
+            NSColor(red: 1.00, green: 1.00, blue: 1.00, alpha: 1).cgColor,
+            NSColor(red: 1.00, green: 0.95, blue: 0.70, alpha: 1).cgColor,
+            NSColor(red: 1.00, green: 0.65, blue: 0.05, alpha: 1).cgColor,
+            NSColor(red: 1.00, green: 0.35, blue: 0.00, alpha: 1).cgColor,
+            NSColor(red: 0.95, green: 0.10, blue: 0.00, alpha: 1).cgColor,
+            NSColor(red: 0.60, green: 0.05, blue: 0.00, alpha: 1).cgColor,
+        ]
+
+        let originX = lastBounds.midX
+        let originY = screenH - lastBounds.midY
+
+        let count = Int.random(in: 40...55)
+        for i in 0..<count {
+            let isCoreSpark = i < 8
+
+            let sz: CGFloat = isCoreSpark
+                ? CGFloat.random(in: 2...4)
+                : CGFloat.random(in: 1.5...8)
+
+            let color = isCoreSpark ? palette[0] : palette.randomElement()!
+
+            let layer = layerPool.dequeue()
+            layer.frame = CGRect(x: 0, y: 0, width: sz, height: sz)
+            layer.cornerRadius = sz * 0.4
+            layer.backgroundColor = color
+            if sz > 4 {
+                layer.shadowColor = NSColor(red: 1, green: 0.3, blue: 0, alpha: 1).cgColor
+                layer.shadowOpacity = 1.0
+                layer.shadowRadius = 5
+                layer.shadowOffset = .zero
+            }
+            rootLayer.addSublayer(layer)
+
+            let angle = CGFloat.random(in: 0...(2 * .pi))
+            let speed = isCoreSpark
+                ? CGFloat.random(in: 40...120)
+                : CGFloat.random(in: 80...320)
+            let vx = cos(angle) * speed
+            var vy = sin(angle) * speed
+            vy += CGFloat.random(in: 30...90) // heat rises
+
+            let life: CGFloat = CGFloat.random(in: 0.4...1.1)
+
+            particles.append(Particle(
+                layer: layer, x: originX, y: originY,
+                vx: vx, vy: vy,
+                life: life, maxLife: life
+            ))
+            layer.position = CGPoint(x: originX, y: originY)
+        }
     }
 }

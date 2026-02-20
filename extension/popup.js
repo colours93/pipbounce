@@ -26,6 +26,7 @@ const els = {
 
 const zoneBtns = els.seg.querySelectorAll("button");
 let pipIsActive = false;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------
 //  Color accent system
@@ -94,23 +95,42 @@ async function exitPip() {
 //  Startup -- check daemon, auto-enter PiP if not active
 // ---------------------------------------------------------------------------
 
-async function init() {
-  const status = await fetchStatus();
-  if (status && !status.pipActive) {
-    // Daemon online, no PiP yet -- auto-enter
-    await enterPip();
-    // Give Chrome a moment to create the PiP window, then refresh
-    setTimeout(fetchStatus, 600);
-  } else if (!status) {
-    // Daemon offline -- wait for launchd KeepAlive to restart it
+async function ensureStarted() {
+  let status = await fetchStatus();
+
+  if (!status) {
     els.statusLabel.textContent = "Starting daemon...";
-    await new Promise((r) => setTimeout(r, 1200));
-    const retry = await fetchStatus();
-    if (retry && !retry.pipActive) {
-      await enterPip();
-      setTimeout(fetchStatus, 600);
+
+    // If daemon is reachable-but-unhealthy, this nudges launchd restart.
+    try {
+      await fetch(`${API}/restart`, { method: "POST" });
+    } catch {}
+
+    for (let i = 0; i < 10; i += 1) {
+      await sleep(350);
+      status = await fetchStatus();
+      if (status) break;
     }
   }
+
+  if (!status) return false;
+
+  if (!status.pipActive) {
+    await enterPip();
+
+    // Wait for PiP window creation and daemon discovery.
+    for (let i = 0; i < 8; i += 1) {
+      await sleep(300);
+      const refreshed = await fetchStatus();
+      if (refreshed?.pipActive) return true;
+    }
+  }
+
+  return true;
+}
+
+async function init() {
+  await ensureStarted();
 }
 
 init();
@@ -129,8 +149,7 @@ els.pipBtn.addEventListener("click", async () => {
     await exitPip();
     setTimeout(fetchStatus, 400);
   } else {
-    await enterPip();
-    setTimeout(fetchStatus, 600);
+    await ensureStarted();
   }
 });
 
@@ -184,8 +203,8 @@ for (const game of games) {
     setTimeout(() => el.classList.remove("launching"), 300);
 
     if (!pipIsActive) {
-      await enterPip();
-      await new Promise((r) => setTimeout(r, 800));
+      const started = await ensureStarted();
+      if (!started) return;
     }
     try {
       const res = await fetch(`${API}/${game.key}`, { method: "POST" });

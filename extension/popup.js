@@ -160,7 +160,7 @@ els.pipBtn.addEventListener("click", async () => {
 const games = [
   { id: "pipongBtn", key: "pipong", label: "PiPong", stopLabel: "Stop PiPong" },
   { id: "pipong2Btn", key: "pipong2", label: "PiPong 2", stopLabel: "Stop PiPong 2" },
-  { id: "flappyBtn", key: "flappy", label: "Flappy Bird", stopLabel: "Stop Flappy" },
+  { id: "flappyBtn", key: "flappy", label: "FlaPiPy Bird", stopLabel: "Stop FlaPiPy" },
   { id: "bounceBtn", key: "bounce", statusKey: "bounceAuto", label: "Bounce", stopLabel: "Stop Bounce" },
   { id: "bouncePaddleBtn", key: "bounce-paddle", statusKey: "bouncePaddle", label: "Bounce Paddle", stopLabel: "Stop Paddle" },
   { id: "invadersBtn", key: "invaders", label: "Space Invaders", stopLabel: "Stop Invaders" },

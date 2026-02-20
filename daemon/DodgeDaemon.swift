@@ -2,7 +2,7 @@ import Cocoa
 import ApplicationServices
 import UserNotifications
 
-class PipBounceDaemon {
+class XPipDaemon {
     private var lastDodgeTime = Date.distantPast
     private var interacting = false
     private var wasOnPip = false
@@ -60,7 +60,7 @@ class PipBounceDaemon {
 
     private func finishStart() {
         installHotkey()
-        print("pipbounce daemon started")
+        print("xpip daemon started")
 
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: .main)
         t.schedule(deadline: .now(), repeating: .milliseconds(16), leeway: .microseconds(500))
@@ -74,7 +74,7 @@ class PipBounceDaemon {
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "PipBounce"
+            content.title = "XPip"
             content.body = "Accessibility access required. Opening System Settings…"
             content.sound = .default
             let request = UNNotificationRequest(identifier: "accessibility", content: content, trigger: nil)

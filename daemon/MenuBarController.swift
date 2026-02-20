@@ -15,9 +15,9 @@ class MenuBarController: NSObject, NSMenuDelegate {
 
         if let button = statusItem.button {
             if #available(macOS 11.0, *) {
-                button.image = NSImage(systemSymbolName: "pip", accessibilityDescription: "PipBounce")
+                button.image = NSImage(systemSymbolName: "pip", accessibilityDescription: "XPip")
             } else {
-                button.title = "PB"
+                button.title = "XP"
             }
         }
 
@@ -28,10 +28,10 @@ class MenuBarController: NSObject, NSMenuDelegate {
 
     private func buildMenu() {
         // Title + version
-        let titleItem = NSMenuItem(title: "PipBounce", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "XPip", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         titleItem.attributedTitle = NSAttributedString(
-            string: "PipBounce",
+            string: "XPip",
             attributes: [.font: NSFont.boldSystemFont(ofSize: 13)]
         )
         menu.addItem(titleItem)
@@ -108,7 +108,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(uninstallItem)
 
         // Quit
-        let quitItem = NSMenuItem(title: "Quit PipBounce", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit XPip", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
     }
@@ -182,7 +182,7 @@ class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func quitApp() {
         cleanup()
         // Remove KeepAlive so launchd doesn't restart us
-        let label = "com.pipbounce.daemon"
+        let label = "com.xpip.daemon"
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         proc.arguments = ["bootout", "gui/\(getuid())/\(label)"]

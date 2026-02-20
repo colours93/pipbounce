@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-#  pipbounce Installer
+#  xpip Installer
 #  Compiles the Swift daemon, generates extension icons, and prints
 #  post-install instructions.
 # ---------------------------------------------------------------------------
@@ -10,9 +10,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DAEMON_DIR="$SCRIPT_DIR/daemon"
 EXTENSION_DIR="$SCRIPT_DIR/extension"
-INSTALL_DIR="$HOME/.pipbounce"
-APP_BUNDLE="$INSTALL_DIR/pipbounce.app"
-BINARY="$APP_BUNDLE/Contents/MacOS/pipbounce"
+INSTALL_DIR="$HOME/.xpip"
+APP_BUNDLE="$INSTALL_DIR/xpip.app"
+BINARY="$APP_BUNDLE/Contents/MacOS/xpip"
 PORT=51789
 
 # ---------------------------------------------------------------------------
@@ -46,23 +46,38 @@ fi
 log "OK" "All prerequisites met."
 
 # ---------------------------------------------------------------------------
-#  Step 1 -- Stop any running pipbounce process
+#  Step 1 -- Stop any running xpip process
 # ---------------------------------------------------------------------------
 
 section "Step 1/4: Stop existing daemon"
 
-PLIST_LABEL="com.pipbounce.daemon"
+PLIST_LABEL="com.xpip.daemon"
+LEGACY_LABEL="com.pipbounce.daemon"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+LEGACY_PLIST_PATH="$HOME/Library/LaunchAgents/$LEGACY_LABEL.plist"
+stopped_any=false
 
-if launchctl list "$PLIST_LABEL" >/dev/null 2>&1; then
-    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" 2>/dev/null || true
-    sleep 0.5
-    log "1/4" "Stopped existing launchd agent."
-elif pgrep -x pipbounce >/dev/null 2>&1; then
-    pkill -x pipbounce && sleep 0.5
-    log "1/4" "Killed running pipbounce process."
+for label in "$PLIST_LABEL" "$LEGACY_LABEL"; do
+    if launchctl list "$label" >/dev/null 2>&1; then
+        launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+        stopped_any=true
+    fi
+done
+
+for proc in xpip pipbounce; do
+    if pgrep -x "$proc" >/dev/null 2>&1; then
+        pkill -x "$proc" || true
+        stopped_any=true
+    fi
+done
+
+rm -f "$LEGACY_PLIST_PATH"
+sleep 0.5
+
+if [ "$stopped_any" = true ]; then
+    log "1/4" "Stopped existing daemon agents/processes (xpip + legacy pipbounce)."
 else
-    log "1/4" "No running pipbounce process found. Continuing."
+    log "1/4" "No running xpip/pipbounce process found. Continuing."
 fi
 
 # ---------------------------------------------------------------------------
@@ -79,11 +94,11 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'INFOPLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.pipbounce.daemon</string>
+    <string>com.xpip.daemon</string>
     <key>CFBundleName</key>
-    <string>pipbounce</string>
+    <string>xpip</string>
     <key>CFBundleExecutable</key>
-    <string>pipbounce</string>
+    <string>xpip</string>
     <key>LSUIElement</key>
     <true/>
 </dict>
@@ -103,9 +118,9 @@ chmod +x "$BINARY"
 
 # Check for Developer ID cert first (for distribution), then dev certs, then ad-hoc
 DEVID_SIGN=$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}' || true)
-SIGN_ID=$(security find-identity -v -p codesigning | grep -E "pipbounce Dev|xpip Dev" | head -1 | awk -F'"' '{print $2}' || true)
+SIGN_ID=$(security find-identity -v -p codesigning | grep -E "xpip Dev|pipbounce Dev" | head -1 | awk -F'"' '{print $2}' || true)
 
-ENTITLEMENTS="$DAEMON_DIR/pipbounce.entitlements"
+ENTITLEMENTS="$DAEMON_DIR/xpip.entitlements"
 
 if [ -n "$DEVID_SIGN" ]; then
     codesign --force --options runtime \
@@ -125,7 +140,7 @@ fi
 # Optional notarization (run with NOTARIZE=1 APPLE_ID=... TEAM_ID=... APP_PASSWORD=...)
 if [ "${NOTARIZE:-0}" = "1" ]; then
     log "2/4" "Notarizing..."
-    BUNDLE_ZIP="$INSTALL_DIR/pipbounce-notarize.zip"
+    BUNDLE_ZIP="$INSTALL_DIR/xpip-notarize.zip"
     ditto -c -k --keepParent "$APP_BUNDLE" "$BUNDLE_ZIP"
     xcrun notarytool submit "$BUNDLE_ZIP" \
         --apple-id "${APPLE_ID:?Set APPLE_ID for notarization}" \
@@ -214,9 +229,9 @@ cat > "$PLIST_PATH" << PLISTEOF
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$INSTALL_DIR/pipbounce.log</string>
+    <string>$INSTALL_DIR/xpip.log</string>
     <key>StandardErrorPath</key>
-    <string>$INSTALL_DIR/pipbounce.log</string>
+    <string>$INSTALL_DIR/xpip.log</string>
 </dict>
 </plist>
 PLISTEOF
@@ -250,19 +265,19 @@ if [ "${DMG:-0}" = "1" ]; then
     mkdir -p "$DMG_STAGING"
 
     # Copy app bundle
-    cp -R "$APP_BUNDLE" "$DMG_STAGING/pipbounce.app"
+    cp -R "$APP_BUNDLE" "$DMG_STAGING/xpip.app"
 
     # Copy extension
     cp -R "$EXTENSION_DIR" "$DMG_STAGING/extension"
 
     # Create README
     cat > "$DMG_STAGING/README.txt" << 'READMEEOF'
-PipBounce — Setup Instructions
+XPip — Setup Instructions
 
-1. Drag pipbounce.app to your preferred location (e.g. /Applications)
+1. Drag xpip.app to your preferred location (e.g. /Applications)
    or double-click to run from here.
 
-2. On first launch, PipBounce will ask for Accessibility permission.
+2. On first launch, XPip will ask for Accessibility permission.
    Follow the on-screen instructions.
 
 3. Load the Chrome extension:
@@ -270,13 +285,13 @@ PipBounce — Setup Instructions
    b. Enable "Developer mode" (top-right toggle)
    c. Click "Load unpacked" and select the "extension" folder
 
-The menu bar icon (PB) lets you toggle dodge/glow, launch games,
+The menu bar icon (XP) lets you toggle dodge/glow, launch games,
 restart, or uninstall.
 READMEEOF
 
-    DMG_PATH="$SCRIPT_DIR/PipBounce.dmg"
+    DMG_PATH="$SCRIPT_DIR/XPip.dmg"
     rm -f "$DMG_PATH"
-    hdiutil create -volname "PipBounce" \
+    hdiutil create -volname "XPip" \
         -srcfolder "$DMG_STAGING" \
         -ov -format UDZO \
         "$DMG_PATH"
@@ -306,6 +321,6 @@ printf "     b. Enable \"Developer mode\" (top-right toggle)\n"
 printf "     c. Click \"Load unpacked\" and select:\n"
 printf "        %s\n" "$EXTENSION_DIR"
 printf "\n"
-printf "  The menu bar icon lets you control PipBounce.\n"
-printf "  Logs: %s/pipbounce.log\n" "$INSTALL_DIR"
+printf "  The menu bar icon lets you control XPip.\n"
+printf "  Logs: %s/xpip.log\n" "$INSTALL_DIR"
 printf "\n"

@@ -1,6 +1,6 @@
 import Cocoa
 
-let pidPath = NSString("~/.pipbounce/pipbounce.pid").expandingTildeInPath
+let pidPath = NSString("~/.xpip/xpip.pid").expandingTildeInPath
 
 func killExisting() {
     guard let pidStr = try? String(contentsOfFile: pidPath, encoding: .utf8),
@@ -34,7 +34,7 @@ settings.load()
 SoundKit.shared.preload()
 let server = ControlServer()
 server.start()
-let daemon = PipBounceDaemon()
+let daemon = XPipDaemon()
 let menuBar = MenuBarController()
 
 signal(SIGINT, SIG_IGN)

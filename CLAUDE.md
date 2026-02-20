@@ -1,4 +1,4 @@
-# pipbounce
+# xpip
 
 macOS daemon + Chrome extension. PiP windows dodge your cursor and become retro arcade machines.
 
@@ -30,13 +30,13 @@ NOTARIZE=1 APPLE_ID=... TEAM_ID=... APP_PASSWORD=... bash install.sh
 DMG=1 bash install.sh
 ```
 
-The binary lives at `~/.pipbounce/pipbounce.app/Contents/MacOS/pipbounce`.
+The binary lives at `~/.xpip/xpip.app/Contents/MacOS/xpip`.
 
 ## Accessibility Permission
 
 The daemon needs Accessibility access to move PiP windows. On first launch without permission, an onboarding window guides the user through granting it. It auto-detects when permission is granted and closes itself.
 
-Manual path: System Settings > Privacy & Security > Accessibility > add `~/.pipbounce/pipbounce.app`.
+Manual path: System Settings > Privacy & Security > Accessibility > add `~/.xpip/xpip.app`.
 
 Without this, AXUIElement calls fail silently and nothing moves.
 
@@ -53,19 +53,19 @@ The icon dims when dodge is disabled. `LSUIElement` stays `true` (no dock icon).
 ## Architecture
 
 - `daemon/` — Pure Swift, no Package.swift, no Xcode project. Compiled directly with `swiftc`.
-- `daemon/main.swift` — Entry point. Sets up `NSApplication`, `ControlServer`, `PipBounceDaemon`, `MenuBarController`.
+- `daemon/main.swift` — Entry point. Sets up `NSApplication`, `ControlServer`, `XPipDaemon`, `MenuBarController`.
 - `daemon/MenuBarController.swift` — NSStatusItem menu bar icon with settings toggles, game launcher, uninstall.
 - `daemon/OnboardingWindow.swift` — First-launch Accessibility permission guide window.
-- `daemon/Uninstaller.swift` — Confirmation dialog + cleanup (bootout launchd, remove plist, remove ~/.pipbounce).
+- `daemon/Uninstaller.swift` — Confirmation dialog + cleanup (bootout launchd, remove plist, remove ~/.xpip).
 - `daemon/DodgeDaemon.swift` — Core dodge logic, PiP window tracking, animation, game toggling.
-- `daemon/Settings.swift` — JSON settings at `~/.pipbounce/settings.json`.
+- `daemon/Settings.swift` — JSON settings at `~/.xpip/settings.json`.
 - `daemon/ControlServer.swift` — HTTP API on port 51789 for Chrome extension communication.
 - `daemon/SoundKit.swift` — 5 SFX → NSSound mapping, preloaded at startup.
 - `daemon/Games/` — 14 game modes (13 games, Bounce has 2 modes), all subclass `GameBase` in `GameBase.swift`
 - `daemon/Games/GameBase.swift` — Shared game infrastructure: `GameState` enum, collision helpers, overlays, score labels, pip movement, border sync, pixel art rendering, `LayerPool` integration
 - `daemon/Games/LayerPool.swift` — CALayer recycler (dequeue/enqueue/drain) to eliminate allocation churn
 - `daemon/Games/Sprites/` — 10 extracted pixel-art sprite enum files (pre-baked CGImage constants)
-- `daemon/pipbounce.entitlements` — Hardened runtime entitlements (no sandbox, Apple Events).
+- `daemon/xpip.entitlements` — Hardened runtime entitlements (no sandbox, Apple Events).
 - `extension/` — Chrome extension (popup UI, background script, content script)
 - `install.sh` — Full build system with signing, notarization, dmg packaging.
 - `dev.sh` — Fast dev rebuild: compile + sign + restart.
@@ -87,14 +87,14 @@ The icon dims when dodge is disabled. `LSUIElement` stays `true` (no dock icon).
 ## Logs
 
 ```bash
-tail -f ~/.pipbounce/pipbounce.log
+tail -f ~/.xpip/xpip.log
 ```
 
 ## Stop/Restart/Uninstall
 
 ```bash
 # Stop
-launchctl bootout gui/$(id -u)/com.pipbounce.daemon
+launchctl bootout gui/$(id -u)/com.xpip.daemon
 
 # Restart (dev)
 bash dev.sh

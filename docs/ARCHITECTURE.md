@@ -1,8 +1,8 @@
-# pipbounce — Architecture
+# xpip — Architecture
 
 ![version](https://img.shields.io/badge/version-2.0-blue) ![last updated](https://img.shields.io/badge/updated-2026--02--20-brightgreen)
 
-pipbounce is a macOS background daemon plus a Chrome extension that makes Picture-in-Picture windows dodge the mouse cursor and doubles as a retro arcade platform. This document covers the overall system architecture, daemon internals, and process lifecycle. For detailed treatment of the dodge algorithm and PiP detection see [DODGE-SYSTEM.md](./DODGE-SYSTEM.md); for the game engine and all thirteen game modes see [GAME-ENGINE.md](./GAME-ENGINE.md); for the glow border and sacred geometry burst system see [RGB-BORDER.md](./RGB-BORDER.md); for the HTTP API see [API-REFERENCE.md](./API-REFERENCE.md).
+xpip is a macOS background daemon plus a Chrome extension that makes Picture-in-Picture windows dodge the mouse cursor and doubles as a retro arcade platform. This document covers the overall system architecture, daemon internals, and process lifecycle. For detailed treatment of the dodge algorithm and PiP detection see [DODGE-SYSTEM.md](./DODGE-SYSTEM.md); for the game engine and all thirteen game modes see [GAME-ENGINE.md](./GAME-ENGINE.md); for the glow border and sacred geometry burst system see [RGB-BORDER.md](./RGB-BORDER.md); for the HTTP API see [API-REFERENCE.md](./API-REFERENCE.md).
 
 ---
 
@@ -21,7 +21,7 @@ All Mermaid diagrams in this documentation follow a consistent color system:
 
 ## System Architecture Overview
 
-pipbounce is organized into three cooperating layers that span two processes and the macOS kernel:
+xpip is organized into three cooperating layers that span two processes and the macOS kernel:
 
 1. **Chrome Extension** — A Manifest V3 extension running inside Chrome. It provides the user-visible popup UI and issues commands to the daemon over localhost HTTP. It also injects content scripts that interact with the browser's Picture-in-Picture API to enter and exit PiP mode.
 
@@ -48,10 +48,10 @@ graph TB
         PIP["PiP Window\nChrome-managed\nfloating overlay"]
     end
 
-    subgraph DMN["Swift Daemon  ( ~/.pipbounce/pipbounce.app )"]
+    subgraph DMN["Swift Daemon  ( ~/.xpip/xpip.app )"]
         MAIN["main.swift\nPID lock + signals\nNSApplication.shared\nRunLoop.main.run()"]
         SRV["ControlServer\nRaw BSD socket :51789\nSO_REUSEADDR, listen(5)\nDispatchQueue global utility\nFull CORS headers"]
-        DD["PipBounceDaemon\nTimer.scheduledTimer 1/60s\nCGEvent mouse polling\nDodge animation 16ms DispatchSource\nCubic ease-out 180ms"]
+        DD["XPipDaemon\nTimer.scheduledTimer 1/60s\nCGEvent mouse polling\nDodge animation 16ms DispatchSource\nCubic ease-out 180ms"]
         DISC["PipDiscovery\nNSWorkspace Chrome app scan\nAXUIElement window enumeration\nTitle + Document PiP heuristics\nquickCheck() fast path"]
         GEOM["ScreenGeometry\ngetScreenFrame()\ngetFurthestCorner()\nmargin-aware corner math"]
         HK["Hotkey\nCGEvent.tapCreate\ncgSessionEventTap\nkeyDown mask\nEvent consume on match"]
@@ -61,7 +61,7 @@ graph TB
         LP["LayerPool\nCALayer recycler per game\ndequeue / enqueue / drain\nZero-alloc hot path"]
         GAMES["14 Game Modes\nGameBase + GameState enum\nCollision helpers (4 static methods)\nDispatchSourceTimer 2-8ms\n10 Sprite enum files"]
         MAIN -->|"ControlServer.start()"| SRV
-        MAIN -->|"PipBounceDaemon.start()"| DD
+        MAIN -->|"XPipDaemon.start()"| DD
         MAIN -->|"SoundKit.shared.preload()"| SK
         DD -->|"findPipWindow() / quickCheck()"| DISC
         DD -->|"getFurthestCorner()"| GEOM
@@ -118,11 +118,11 @@ graph TB
 setbuf(stdout, nil)       — unbuffered stdout for launchd log capture
 setbuf(stderr, nil)       — unbuffered stderr
 
-killExisting()            — read ~/.pipbounce/pipbounce.pid
+killExisting()            — read ~/.xpip/xpip.pid
                           — SIGTERM the old PID
                           — usleep(300_000) — give it 300ms to exit
 
-writePid()                — create ~/.pipbounce/ if needed
+writePid()                — create ~/.xpip/ if needed
                           — write getpid() to the PID file
 
 NSApplication.shared      — initialize Cocoa run loop infrastructure
@@ -132,7 +132,7 @@ settings.load()           — load persisted settings from disk
 SoundKit.shared.preload() — map 5 SFX to system NSSound instances
 
 ControlServer().start()   — bind :51789, start accept loop on global(.utility)
-PipBounceDaemon().start() — check AXIsProcessTrusted(), installHotkey() + DispatchSourceTimer 16ms
+XPipDaemon().start() — check AXIsProcessTrusted(), installHotkey() + DispatchSourceTimer 16ms
 
 signal(SIGINT)  { cleanup(); exit(0) }
 signal(SIGTERM) { cleanup(); exit(0) }
@@ -140,11 +140,11 @@ signal(SIGTERM) { cleanup(); exit(0) }
 RunLoop.main.run()        — block forever, dispatching timers and events
 ```
 
-`NSApplication.shared` is required even though pipbounce is a background daemon (it has `LSUIElement = true` in its `Info.plist`). Cocoa's window and timer machinery depends on the application object being initialized. The `RunLoop.main.run()` call at the end drives both the 60 fps timer and the CGEvent tap source.
+`NSApplication.shared` is required even though xpip is a background daemon (it has `LSUIElement = true` in its `Info.plist`). Cocoa's window and timer machinery depends on the application object being initialized. The `RunLoop.main.run()` call at the end drives both the 60 fps timer and the CGEvent tap source.
 
 ### The 1/60s tick loop
 
-`PipBounceDaemon.start()` schedules a `Timer.scheduledTimer` with interval `1/60.0` seconds on the main run loop. Every tick calls `PipBounceDaemon.tick()`, which is the central coordinator for the dodge behavior.
+`XPipDaemon.start()` schedules a `Timer.scheduledTimer` with interval `1/60.0` seconds on the main run loop. Every tick calls `XPipDaemon.tick()`, which is the central coordinator for the dodge behavior.
 
 The tick immediately bails out if any game engine is active or a dodge animation is in progress. This is a deliberate design: game engines own their own `DispatchSourceTimer` at their preferred intervals (2 ms for physics-heavy games, 8 ms for turn-based ones), so the 60 fps timer would be redundant and would contend for the AX API during gameplay.
 
@@ -202,11 +202,11 @@ The daemon is composed of eight cooperating subsystems. The table below summariz
 |-----------|------|------|-----------------|
 | `main.swift` | `main.swift` | PID lifecycle, signal handlers, startup order | Direct calls at boot |
 | `ControlServer` | `ControlServer.swift` | HTTP server socket, request routing | Reads/writes `settings` singleton; dispatches to `daemon.toggleGame()` via main-queue semaphore |
-| `PipBounceDaemon` | `DodgeDaemon.swift` | 60 fps tick, dodge animation, game coordinator | Calls `findPipWindow()`, `quickCheck()`, `getFurthestCorner()`, `rgbBorder` methods |
+| `XPipDaemon` | `DodgeDaemon.swift` | 60 fps tick, dodge animation, game coordinator | Calls `findPipWindow()`, `quickCheck()`, `getFurthestCorner()`, `rgbBorder` methods |
 | `PipDiscovery` | `PipDiscovery.swift` | PiP window detection logic | Returns `PipWindowInfo`; calls AX API and `CGWindowListCopyWindowInfo` |
 | `ScreenGeometry` | `ScreenGeometry.swift` | Screen frame conversion, corner math | Pure functions, no shared state |
 | `Hotkey` | `Hotkey.swift` | Global keyboard event tap | Mutates `settings.enabled` directly |
-| `RGBBorder` | `RGBBorder.swift` | Floating overlay NSWindow, CALayer rendering, burst geometry | Called by `PipBounceDaemon` and game engines |
+| `RGBBorder` | `RGBBorder.swift` | Floating overlay NSWindow, CALayer rendering, burst geometry | Called by `XPipDaemon` and game engines |
 | `Settings` | `Settings.swift` | All runtime configuration | Global `let settings = Settings()` instance |
 | `SoundKit` | `SoundKit.swift` | Sound effects (5 SFX → NSSound) | Singleton `SoundKit.shared`; preloaded at startup; called by game engines |
 | `LayerPool` | `Games/LayerPool.swift` | CALayer recycling | One instance per `GameBase`; `dequeue()`/`enqueue()`/`drain()` |
@@ -227,7 +227,7 @@ The Mach time API (`mach_absolute_time` + `mach_timebase_info`) is used instead 
 
 ### Game coordination
 
-`PipBounceDaemon.toggleGame(_ game: MiniGame)` is the single entry point for starting and stopping game engines. It is always called on the main queue (dispatched from `ControlServer` via `DispatchSemaphore`). The method:
+`XPipDaemon.toggleGame(_ game: MiniGame)` is the single entry point for starting and stopping game engines. It is always called on the main queue (dispatched from `ControlServer` via `DispatchSemaphore`). The method:
 
 1. Iterates over all 13 game singletons (including both PiPong variants) and stops any that are currently active
 2. Resets the border tilt and hides the border
@@ -254,10 +254,10 @@ flowchart LR
     S3["Step 3\nGenerate extension icons"]
     S4["Step 4\nInstall launchd agent"]
 
-    D1["launchctl bootout\ngui/UID/com.pipbounce.daemon\nor pkill -x pipbounce\nor no-op if not running"]
-    D2["swiftc daemon/*.swift Games/*.swift\n-framework Cocoa\n-framework ApplicationServices\n-framework QuartzCore\n-O optimization\nOutput: ~/.pipbounce/pipbounce.app\n          Contents/MacOS/pipbounce\ncodesign: dev cert or ad-hoc --sign -"]
+    D1["launchctl bootout\ngui/UID/com.xpip.daemon\nor pkill -x xpip\nor no-op if not running"]
+    D2["swiftc daemon/*.swift Games/*.swift\n-framework Cocoa\n-framework ApplicationServices\n-framework QuartzCore\n-O optimization\nOutput: ~/.xpip/xpip.app\n          Contents/MacOS/xpip\ncodesign: dev cert or ad-hoc --sign -"]
     D3["python3 inline script\nGenerate 16 / 48 / 128 px PNGs\nSaved to extension/icons/\nPure PNG encoder no dependencies"]
-    D4["Write com.pipbounce.daemon.plist\nKeepAlive: true\nRunAtLoad: true\nStdout/Stderr to pipbounce.log\nlaunchctl bootstrap gui/UID\nlaunchctl kickstart -k\ntccutil reset Accessibility"]
+    D4["Write com.xpip.daemon.plist\nKeepAlive: true\nRunAtLoad: true\nStdout/Stderr to xpip.log\nlaunchctl bootstrap gui/UID\nlaunchctl kickstart -k\ntccutil reset Accessibility"]
 
     S1 --> S2 --> S3 --> S4
     S1 -. detail .-> D1
@@ -283,13 +283,13 @@ flowchart TD
     classDef event fill:#3a0a15,stroke:#ff4d6d,color:#ffd0d8
     classDef hotkey fill:#1a0a3e,stroke:#b44dff,color:#e0d0ff
 
-    LCH["launchd executes binary\n~/.pipbounce/pipbounce.app\n  Contents/MacOS/pipbounce"] --> UB["setbuf stdout nil\nsetbuf stderr nil\nUnbuffered for launchd log capture"]
-    UB --> KE["killExisting()\nRead ~/.pipbounce/pipbounce.pid\nSIGTERM old PID if different from getpid()\nusleep 300ms"]
-    KE --> WP["writePid()\nCreate ~/.pipbounce/ directory\nWrite getpid() atomically"]
+    LCH["launchd executes binary\n~/.xpip/xpip.app\n  Contents/MacOS/xpip"] --> UB["setbuf stdout nil\nsetbuf stderr nil\nUnbuffered for launchd log capture"]
+    UB --> KE["killExisting()\nRead ~/.xpip/xpip.pid\nSIGTERM old PID if different from getpid()\nusleep 300ms"]
+    KE --> WP["writePid()\nCreate ~/.xpip/ directory\nWrite getpid() atomically"]
     WP --> NA["NSApplication.shared\nsetActivationPolicy(.accessory)"]
     NA --> PRE["settings.load()\nSoundKit.shared.preload()\nMap 5 SFX → NSSound"]
     PRE --> CS["ControlServer.start()\nCreate AF_INET SOCK_STREAM socket\nSO_REUSEADDR\nBind 127.0.0.1:51789\nlisten(5)\nAccept loop on DispatchQueue.global(.utility)"]
-    CS --> DS["PipBounceDaemon.start()\nCheck AXIsProcessTrusted()\ninstallHotkey()\nDispatchSourceTimer 16ms strict"]
+    CS --> DS["XPipDaemon.start()\nCheck AXIsProcessTrusted()\ninstallHotkey()\nDispatchSourceTimer 16ms strict"]
 
     subgraph HKS["Global Hotkey (CGEvent tap)"]
         HK1["CGEvent.tapCreate\ncgSessionEventTap headInsertEventTap\nkeyDown event mask"]
@@ -305,9 +305,9 @@ flowchart TD
     DS --> SIG["Register signal handlers\nsignal SIGINT  { cleanup(); exit(0) }\nsignal SIGTERM { cleanup(); exit(0) }"]
     SIG --> RL["RunLoop.main.run()\nBlock forever\nDrives timer + CGEvent tap source"]
 
-    RL -->|"every 16ms"| TICK["PipBounceDaemon.tick()\nMouse poll + PiP discovery\nDodge logic"]
+    RL -->|"every 16ms"| TICK["XPipDaemon.tick()\nMouse poll + PiP discovery\nDodge logic"]
     RL -->|"HTTP request arrives"| REQ["ControlServer.handleClient(fd)\nParse HTTP request\nRoute to handler\nWrite JSON response"]
-    RL -->|"SIGTERM or SIGINT"| SHUT["cleanup()\nRemove ~/.pipbounce/pipbounce.pid\nexit(0)"]
+    RL -->|"SIGTERM or SIGINT"| SHUT["cleanup()\nRemove ~/.xpip/xpip.pid\nexit(0)"]
     SHUT --> LCD["launchd KeepAlive\nRestarts process automatically\nif unexpected exit or /restart"]
 
     class LCH,UB,KE,WP,NA,CS,DS boot
@@ -318,20 +318,20 @@ flowchart TD
 
 ### File system layout
 
-After installation the following files are created. The daemon binary and PID file live under `~/.pipbounce/`; the launchd plist lives in the standard user LaunchAgents directory.
+After installation the following files are created. The daemon binary and PID file live under `~/.xpip/`; the launchd plist lives in the standard user LaunchAgents directory.
 
 ```
-~/.pipbounce/
-├── pipbounce.app/
+~/.xpip/
+├── xpip.app/
 │   ├── Contents/
-│   │   ├── Info.plist              LSUIElement=true, CFBundleIdentifier=com.pipbounce.daemon
+│   │   ├── Info.plist              LSUIElement=true, CFBundleIdentifier=com.xpip.daemon
 │   │   └── MacOS/
-│   │       └── pipbounce           Compiled binary (codesigned)
-├── pipbounce.pid                   Current daemon PID (removed on clean exit)
-└── pipbounce.log                   Stdout + stderr captured by launchd
+│   │       └── xpip           Compiled binary (codesigned)
+├── xpip.pid                   Current daemon PID (removed on clean exit)
+└── xpip.log                   Stdout + stderr captured by launchd
 
 ~/Library/LaunchAgents/
-└── com.pipbounce.daemon.plist      KeepAlive + RunAtLoad, points to binary above
+└── com.xpip.daemon.plist      KeepAlive + RunAtLoad, points to binary above
 ```
 
 ### Permissions required
@@ -343,7 +343,7 @@ The daemon requires two macOS permissions that must be granted manually after in
 | Accessibility | `AXUIElement` API — required to read and write PiP window position and enumerate Chrome's windows | System Settings → Privacy & Security → Accessibility |
 | (optional) Screen Recording | Required by some games that need `CGWindowListCopyWindowInfo` with image data | System Settings → Privacy & Security → Screen Recording |
 
-The installer calls `tccutil reset Accessibility com.pipbounce.daemon` to clear any stale grant for a previous binary hash, prompting macOS to re-request the permission for the newly compiled binary.
+The installer calls `tccutil reset Accessibility com.xpip.daemon` to clear any stale grant for a previous binary hash, prompting macOS to re-request the permission for the newly compiled binary.
 
 ---
 
@@ -436,7 +436,7 @@ Pixel-art sprite data was extracted from inline arrays in game files into 10 ded
 ## Source file map
 
 ```
-pipbounce/
+xpip/
 ├── install.sh                       4-step build + install + launchd setup
 ├── README.md
 ├── CLAUDE.md                        AI assistant instructions

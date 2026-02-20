@@ -10,13 +10,32 @@ class Settings {
     var hotkeyCode: UInt16 = 2       // "d" key
     var hotkeyFlags: UInt32 = 0x108  // cmd+shift
 
+    private static let legacyFilePath: String = {
+        let legacyDir = NSString("~/.pipbounce").expandingTildeInPath
+        return (legacyDir as NSString).appendingPathComponent("settings.json")
+    }()
+
     private static let filePath: String = {
-        let dir = NSString("~/.pipbounce").expandingTildeInPath
+        let dir = NSString("~/.xpip").expandingTildeInPath
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         return (dir as NSString).appendingPathComponent("settings.json")
     }()
 
+    private static func migrateLegacySettingsIfNeeded() {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: filePath),
+              fm.fileExists(atPath: legacyFilePath) else { return }
+
+        do {
+            try fm.copyItem(atPath: legacyFilePath, toPath: filePath)
+            print("Migrated settings from \(legacyFilePath) to \(filePath)")
+        } catch {
+            print("Failed to migrate legacy settings: \(error)")
+        }
+    }
+
     func load() {
+        Self.migrateLegacySettingsIfNeeded()
         guard let data = FileManager.default.contents(atPath: Self.filePath),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         if let v = json["enabled"] as? Bool { enabled = v }

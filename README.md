@@ -1,8 +1,8 @@
-# pipbounce
+# xpip
 
 **A macOS daemon + Chrome extension that makes Picture-in-Picture windows dodge your mouse cursor — and turns them into retro arcade machines.**
 
-pipbounce watches your cursor at 60 fps and flings PiP windows away when you approach from the side. Sneak in from a corner to interact with playback controls. Toggle an animated RGB glow border. Or launch one of 13 built-in mini-games (with 14 modes) that use the PiP window as a game object bouncing around your screen.
+xpip watches your cursor at 60 fps and flings PiP windows away when you approach from the side. Sneak in from a corner to interact with playback controls. Toggle an animated RGB glow border. Or launch one of 13 built-in mini-games (with 14 modes) that use the PiP window as a game object bouncing around your screen.
 
 ---
 
@@ -17,7 +17,7 @@ pipbounce watches your cursor at 60 fps and flings PiP windows away when you app
 - **Extracted sprite sheets** — 10 dedicated sprite enums (`AsteroidsSprites`, `PacManSprites`, etc.) with pre-baked `CGImage` constants
 - **Auto-PiP** — Automatically enters PiP when switching tabs via Media Session API
 - **Global hotkey** — Configurable keyboard shortcut (default: Cmd+Shift+D) to toggle dodge on/off
-- **Launchd integration** — Auto-starts on login with `KeepAlive: true`, logs to `~/.pipbounce/pipbounce.log`
+- **Launchd integration** — Auto-starts on login with `KeepAlive: true`, logs to `~/.xpip/xpip.log`
 - **Zero dependencies** — Pure Swift, compiled with `swiftc`, only system frameworks (Cocoa, ApplicationServices, QuartzCore)
 
 ---
@@ -46,7 +46,7 @@ graph TB
     subgraph Daemon["Swift Daemon Process"]
         MAIN["main.swift\nPID lock + signals\nNSApplication.shared"]
         SRV["ControlServer\nRaw BSD sockets\nlocalhost:51789\nCORS + JSON"]
-        DD["PipBounceDaemon\nDispatchSourceTimer 16ms\nCGEvent mouse polling"]
+        DD["XPipDaemon\nDispatchSourceTimer 16ms\nCGEvent mouse polling"]
         DISC["PipDiscovery\nAXUIElement enumeration\nTitle + heuristic matching"]
         GEOM["ScreenGeometry\ngetScreenFrame()\ngetFurthestCorner()"]
         HK["Hotkey\nCGEvent.tapCreate\nSession event tap"]
@@ -227,12 +227,12 @@ flowchart LR
 
     A["Step 1\nStop existing daemon\nlaunchctl bootout\nor pkill"]:::step --> B["Step 2\nCompile Swift\nswiftc daemon/*.swift\nGames/*.swift\nGames/Sprites/*.swift\n-framework Cocoa\n-framework ApplicationServices\n-framework QuartzCore -O"]:::step
     B --> C["Step 3\nGenerate icons\npython3 inline script\n16/48/128px PNGs"]:::step
-    C --> D["Step 4\nInstall launchd agent\ncom.pipbounce.daemon.plist\nKeepAlive + RunAtLoad"]:::step
+    C --> D["Step 4\nInstall launchd agent\ncom.xpip.daemon.plist\nKeepAlive + RunAtLoad"]:::step
 ```
 
-**Output binary:** `~/.pipbounce/pipbounce.app/Contents/MacOS/pipbounce`
+**Output binary:** `~/.xpip/xpip.app/Contents/MacOS/xpip`
 
-**Code signing:** Uses "pipbounce Dev" or "xpip Dev" certificate if found, otherwise ad-hoc (`codesign --sign -`)
+**Code signing:** Uses "xpip Dev" (or legacy "pipbounce Dev") certificate if found, otherwise ad-hoc (`codesign --sign -`)
 
 ```bash
 # 2. Load Chrome extension
@@ -240,7 +240,7 @@ flowchart LR
 
 # 3. Grant Accessibility permission
 #    System Settings → Privacy & Security → Accessibility
-#    Add ~/.pipbounce/pipbounce.app
+#    Add ~/.xpip/xpip.app
 ```
 
 ---
@@ -300,7 +300,7 @@ Raw BSD socket server on `127.0.0.1:51789`. All responses are `Content-Type: app
 sequenceDiagram
     participant P as Popup (popup.js)
     participant S as ControlServer (:51789)
-    participant D as PipBounceDaemon
+    participant D as XPipDaemon
     participant G as Game Engines
 
     Note over P,S: Startup
@@ -639,11 +639,11 @@ flowchart TD
 
     subgraph Runtime["Daemon Runtime (main.swift)"]
         R1["setbuf(stdout/stderr, nil)\nUnbuffered output"]:::run --> R2["killExisting()\nRead PID file\nSIGTERM old process\nusleep 300ms"]:::run
-        R2 --> R3["writePid()\n~/.pipbounce/pipbounce.pid"]:::run
+        R2 --> R3["writePid()\n~/.xpip/xpip.pid"]:::run
         R3 --> R4["NSApplication.shared\nsetActivationPolicy(.accessory)"]:::run
         R4 --> R4b["settings.load()\nSoundKit.shared.preload()"]:::run
         R4b --> R5["ControlServer().start()\nBSD socket on :51789\nDispatchQueue.global(.utility)"]:::run
-        R5 --> R6["PipBounceDaemon().start()\nAccessibility check\ninstallHotkey()\nDispatchSourceTimer 16ms"]:::run
+        R5 --> R6["XPipDaemon().start()\nAccessibility check\ninstallHotkey()\nDispatchSourceTimer 16ms"]:::run
         R6 --> R7["signal(SIGINT/SIGTERM)\ncleanup() + exit(0)"]:::event
         R7 --> R8["NSApplication.shared.run()"]:::run
     end
@@ -663,7 +663,7 @@ flowchart TD
 ## Project Structure
 
 ```
-pipbounce/
+xpip/
 ├── install.sh                          # 4-step build + install + launchd setup
 ├── README.md
 ├── CLAUDE.md                           # AI assistant instructions
@@ -733,14 +733,14 @@ pipbounce/
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| "Accessibility permission required" | Daemon can't access AXUIElement | System Settings → Privacy & Security → Accessibility → add `~/.pipbounce/pipbounce.app` (or terminal app) |
+| "Accessibility permission required" | Daemon can't access AXUIElement | System Settings → Privacy & Security → Accessibility → add `~/.xpip/xpip.app` (or terminal app) |
 | PiP window not detected | Title doesn't match, or Document PiP fails heuristics | Ensure Chrome PiP is active. Document PiP must be: untitled, floating layer, no minimize/close buttons, 200-800px wide, aspect > 1.4 |
-| Extension says "Offline" | Daemon not running or port 51789 in use | Check `launchctl list com.pipbounce.daemon`, or run `~/.pipbounce/pipbounce.app/Contents/MacOS/pipbounce` manually |
+| Extension says "Offline" | Daemon not running or port 51789 in use | Check `launchctl list com.xpip.daemon`, or run `~/.xpip/xpip.app/Contents/MacOS/xpip` manually |
 | Game overlays not visible | Missing Screen Recording permission | System Settings → Privacy & Security → Screen Recording → add the app |
 | Build fails | Missing swiftc or python3 | Run `xcode-select --install`, ensure `python3` is in PATH |
 | Hotkey not working | CGEvent tap not enabled | Grant Accessibility permission; restart daemon |
 | Settings lost on restart | Settings are in-memory only | Expected behavior — settings reset to defaults on daemon restart |
-| Daemon won't start (port busy) | Previous instance didn't clean up | Check `lsof -i :51789`, kill stale process, or delete `~/.pipbounce/pipbounce.pid` |
+| Daemon won't start (port busy) | Previous instance didn't clean up | Check `lsof -i :51789`, kill stale process, or delete `~/.xpip/xpip.pid` |
 
 ---
 

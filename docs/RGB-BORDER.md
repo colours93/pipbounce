@@ -1,6 +1,6 @@
 # RGB Border
 
-The `RGBBorder` class renders the animated glow ring that surrounds the Picture-in-Picture window at all times during pipbounce operation. It is also responsible for the three-tier sacred geometry burst animations that fire during gameplay events such as scoring milestones. This document covers the layer architecture, coordinate system, animation pipeline, color system, and the full burst geometry implementation.
+The `RGBBorder` class renders the animated glow ring that surrounds the Picture-in-Picture window at all times during xpip operation. It is also responsible for the three-tier sacred geometry burst animations that fire during gameplay events such as scoring milestones. This document covers the layer architecture, coordinate system, animation pipeline, color system, and the full burst geometry implementation.
 
 ---
 
@@ -231,7 +231,7 @@ The **cardinal sigil fragments** are four small inverted V-shapes with a dot bel
 
 ## Integration with the Game Engine
 
-`RGBBorder` is owned by `PipBounceDaemon` as a single long-lived instance. During game mode, the instance is passed by reference into the active `MiniGame` subclass via `GameBase.start(screen:pip:border:)`. The base class stores it as `borderRef` and exposes three helper methods used by all game subclasses.
+`RGBBorder` is owned by `XPipDaemon` as a single long-lived instance. During game mode, the instance is passed by reference into the active `MiniGame` subclass via `GameBase.start(screen:pip:border:)`. The base class stores it as `borderRef` and exposes three helper methods used by all game subclasses.
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#0a2540', 'primaryTextColor': '#00fff5', 'primaryBorderColor': '#00fff5', 'lineColor': '#b44dff', 'edgeLabelBackground': '#0d0d0d', 'clusterBkg': '#0d0d0d', 'titleColor': '#00fff5'}}}%%
@@ -241,7 +241,7 @@ graph TD
     classDef gameNode fill:#0a3520,stroke:#00ff88,color:#00ff88
     classDef methodNode fill:#3a0a15,stroke:#ff4d6d,color:#ff4d6d
 
-    PBD["PipBounceDaemon\nrgbBorder: RGBBorder (owned)"]:::ownerNode
+    PBD["XPipDaemon\nrgbBorder: RGBBorder (owned)"]:::ownerNode
     GB["GameBase\nborderRef: RGBBorder? (weak ref)"]:::baseNode
     SYNC["syncBorder(around:)\nrespects settings.glow flag"]:::methodNode
     TILT["borderRef.tilt(angle)\napplies Z rotation"]:::methodNode

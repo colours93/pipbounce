@@ -3,8 +3,8 @@ import Cocoa
 enum Uninstaller {
     static func confirmAndUninstall() {
         let alert = NSAlert()
-        alert.messageText = "Uninstall PipBounce?"
-        alert.informativeText = "This will stop the daemon and remove all PipBounce files.\n\nThe Chrome extension must be removed separately from chrome://extensions."
+        alert.messageText = "Uninstall XPip?"
+        alert.informativeText = "This will stop the daemon and remove all XPip files.\n\nThe Chrome extension must be removed separately from chrome://extensions."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Uninstall")
         alert.addButton(withTitle: "Cancel")
@@ -19,24 +19,26 @@ enum Uninstaller {
     }
 
     static func performUninstall() {
-        let label = "com.pipbounce.daemon"
-        let plistPath = NSString(string: "~/Library/LaunchAgents/\(label).plist").expandingTildeInPath
-        let installDir = NSString(string: "~/.pipbounce").expandingTildeInPath
+        let labels = ["com.xpip.daemon", "com.pipbounce.daemon"]
+        let installDirs = ["~/.xpip", "~/.pipbounce"].map { NSString(string: $0).expandingTildeInPath }
         let fm = FileManager.default
 
-        // 1. Bootout launchd agent
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        proc.arguments = ["bootout", "gui/\(getuid())/\(label)"]
-        try? proc.run()
-        proc.waitUntilExit()
+        // 1. Bootout launchd agent(s) and remove plist(s).
+        for label in labels {
+            let plistPath = NSString(string: "~/Library/LaunchAgents/\(label).plist").expandingTildeInPath
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            proc.arguments = ["bootout", "gui/\(getuid())/\(label)"]
+            try? proc.run()
+            proc.waitUntilExit()
+            try? fm.removeItem(atPath: plistPath)
+        }
 
-        // 2. Remove plist
-        try? fm.removeItem(atPath: plistPath)
+        // 2. Remove install directories (new + legacy).
+        for installDir in installDirs {
+            try? fm.removeItem(atPath: installDir)
+        }
 
-        // 3. Remove install directory
-        try? fm.removeItem(atPath: installDir)
-
-        print("PipBounce uninstalled.")
+        print("XPip uninstalled.")
     }
 }

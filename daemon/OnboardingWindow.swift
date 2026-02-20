@@ -12,7 +12,7 @@ class OnboardingWindow {
             backing: .buffered,
             defer: false
         )
-        w.title = "PipBounce Setup"
+        w.title = "XPip Setup"
         w.center()
         w.isReleasedWhenClosed = false
         w.level = .floating
@@ -24,14 +24,14 @@ class OnboardingWindow {
         var y: CGFloat = 280
 
         // Title
-        let title = makeLabel("PipBounce needs Accessibility access", bold: true, size: 16)
+        let title = makeLabel("XPip needs Accessibility access", bold: true, size: 16)
         title.frame = NSRect(x: 20, y: y, width: 380, height: 24)
         content.addSubview(title)
         y -= 12
 
         // Explanation
         let explanation = makeLabel(
-            "Accessibility permission lets PipBounce detect and move\n"
+            "Accessibility permission lets XPip detect and move\n"
             + "Picture-in-Picture windows when your cursor approaches.",
             bold: false, size: 13
         )
@@ -43,7 +43,7 @@ class OnboardingWindow {
         let steps = [
             "1. Click the button below to open System Settings",
             "2. Click the lock 🔒 to make changes (if locked)",
-            "3. Click \"+\" and add PipBounce, or toggle it on",
+            "3. Click \"+\" and add XPip, or toggle it on",
         ]
         for step in steps {
             let label = makeLabel(step, bold: false, size: 13)
@@ -55,7 +55,7 @@ class OnboardingWindow {
         // Path hint
         y -= 4
         let pathLabel = makeLabel(
-            "App location: ~/.pipbounce/pipbounce.app",
+            "App location: ~/.xpip/xpip.app",
             bold: false, size: 11
         )
         pathLabel.textColor = .secondaryLabelColor

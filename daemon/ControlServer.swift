@@ -3,7 +3,7 @@ import Foundation
 class ControlServer {
     private let port: UInt16 = 51789
     private var serverSocket: Int32 = -1
-    private let clientQueue = DispatchQueue(label: "com.pipbounce.clients", attributes: .concurrent)
+    private let clientQueue = DispatchQueue(label: "com.xpip.clients", attributes: .concurrent)
 
     func start() {
         DispatchQueue.global(qos: .utility).async { [self] in
